@@ -3,7 +3,7 @@ export default function Page() {
     <section className="relative h-[600px] overflow-hidden rounded-xl border shadow-sm">
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-[url('/images/samsung-semiconductor.jpg')] bg-cover bg-center"
+        className="absolute inset-0 bg-[url('/images/Wow-gif.gif')] bg-cover bg-center"
       />
       <div
         aria-hidden="true"
