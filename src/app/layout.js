@@ -1,10 +1,7 @@
 import { Separator } from "@/components/ui/separator"
 import { AppSidebar } from "@/components/app-sidebar"
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar"
+import { AppSidebarProvider } from "@/components/app-sidebar-provider"
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { DynamicBreadcrumb } from "@/components/navigation/dynamic-breadcrumb"
@@ -20,7 +17,7 @@ export default function RootLayout({ children }) {
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <SidebarProvider>
+          <AppSidebarProvider>
             <AppSidebar />
             <SidebarInset>
               <header
@@ -36,7 +33,7 @@ export default function RootLayout({ children }) {
                 {children}
               </main>
             </SidebarInset>
-          </SidebarProvider>
+          </AppSidebarProvider>
         </ThemeProvider>
       </body>
     </html>
