@@ -18,7 +18,7 @@ import {
   IconReload,
 } from "@tabler/icons-react"
 
-import { Badge } from "@/components/ui/badge"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -147,92 +147,88 @@ export function DataTable({ lineId }) {
       <TableContainer className="h-[600px] overflow-auto rounded-lg border">
         <Table className="min-w-max" stickyHeader>
           <TableHeader className="sticky top-0 z-10 bg-muted/40">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
-                    const canSort = header.column.getCanSort()
-                    const sortDir = header.column.getIsSorted()
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  const canSort = header.column.getCanSort()
+                  const sortDir = header.column.getIsSorted()
+                  return (
+                    <TableHead key={header.id} className="whitespace-nowrap">
+                      {canSort ? (
+                        <button
+                          className="inline-flex items-center gap-1"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {sortDir === "asc" && <IconChevronUp className="size-4" />}
+                          {sortDir === "desc" && <IconChevronDown className="size-4" />}
+                        </button>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
+                      <span
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
+                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none"
+                      />
+                    </TableHead>
+                  )
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+
+          <TableBody>
+            {isLoadingRows ? (
+              <TableRow>
+                <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
+                  Loading rows…
+                </TableCell>
+              </TableRow>
+            ) : rowsError ? (
+              <TableRow>
+                <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-destructive">
+                  {rowsError}
+                </TableCell>
+              </TableRow>
+            ) : hasNoRows ? (
+              <TableRow>
+                <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
+                  No rows returned.
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
+                  No rows match your filter.
+                </TableCell>
+              </TableRow>
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => {
+                    const isEditable = Boolean(cell.column.columnDef.meta?.isEditable)
                     return (
-                      <TableHead key={header.id} className="whitespace-nowrap">
-                        {canSort ? (
-                          <button
-                            className="inline-flex items-center gap-1"
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {sortDir === "asc" && <IconChevronUp className="size-4" />}
-                            {sortDir === "desc" && <IconChevronDown className="size-4" />}
-                          </button>
-                        ) : (
-                          flexRender(header.column.columnDef.header, header.getContext())
+                      <TableCell
+                        key={cell.id}
+                        data-editable={isEditable ? "true" : "false"}
+                        className={cn(
+                          "align-top",
+                          !isEditable && "caret-transparent focus:outline-none"
                         )}
-                        <span
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none"
-                        />
-                      </TableHead>
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
                     )
                   })}
                 </TableRow>
-              ))}
-            </TableHeader>
-
-            <TableBody>
-              {isLoadingRows ? (
-                <TableRow>
-                  <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
-                    Loading rows…
-                  </TableCell>
-                </TableRow>
-              ) : rowsError ? (
-                <TableRow>
-                  <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-destructive">
-                    {rowsError}
-                  </TableCell>
-                </TableRow>
-              ) : hasNoRows ? (
-                <TableRow>
-                  <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
-                    No rows returned.
-                  </TableCell>
-                </TableRow>
-              ) : table.getRowModel().rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
-                    No rows match your filter.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => {
-                      const isEditable = Boolean(cell.column.columnDef.meta?.isEditable)
-                      return (
-                        <TableCell
-                          key={cell.id}
-                          data-editable={isEditable ? "true" : "false"}
-                          className={cn(
-                            "align-top",
-                            !isEditable && "caret-transparent focus:outline-none"
-                          )}
-                        >
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      )
-                    })}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
+              ))
+            )}
+          </TableBody>
         </Table>
       </TableContainer>
 
       <div className="flex flex-wrap items-center gap-1 justify-end text-xs text-muted-foreground">
-        <Badge variant="outline">{numberFormatter.format(lastFetchedCount)} fetched</Badge>
-        <Badge variant="outline">
-          Since {appliedSince ? dateFormatter.format(new Date(`${appliedSince}T00:00:00Z`)) : "all time"}
-        </Badge>
         <span>Updated {isLoadingRows ? "just now" : lastUpdatedLabel ?? "just now"}</span>
       </div>
     </section>
