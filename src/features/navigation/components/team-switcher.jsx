@@ -29,6 +29,11 @@ function getInitials(label) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
+function normalizeLineId(value) {
+  if (value === null || value === undefined) return null
+  return typeof value === "string" ? value : String(value)
+}
+
 export function TeamSwitcher({ lines }) {
   const { isMobile } = useSidebar()
   const router = useRouter()
@@ -42,9 +47,12 @@ export function TeamSwitcher({ lines }) {
         .map((line) => {
           if (!line) return null
           if (typeof line === "string") {
-            return { id: line, label: line, description: "" }
+            const id = normalizeLineId(line)
+            if (!id) return null
+            return { id, label: line, description: "" }
           }
-          const id = line.id ?? line.label ?? line.name
+          const rawId = line.id ?? line.label ?? line.name
+          const id = normalizeLineId(rawId)
           const label = line.label ?? line.name ?? id
           const description = line.description ?? ""
           if (!id || !label) return null
@@ -53,13 +61,16 @@ export function TeamSwitcher({ lines }) {
         .filter((option) => option !== null)
     : []
 
-  const activeLineId = selectedLineId
-    ? selectedLineId
-    : typeof lineParam === "string"
+  const normalizedParamLineId =
+    typeof lineParam === "string"
       ? lineParam
       : Array.isArray(lineParam)
-        ? lineParam[0]
-        : options[0]?.id ?? null
+        ? normalizeLineId(lineParam[0])
+        : null
+
+  const activeLineId = selectedLineId
+    ? selectedLineId
+    : normalizedParamLineId ?? options[0]?.id ?? null
 
   const activeLine = options.find((option) => option.id === activeLineId) ?? options[0] ?? null
 

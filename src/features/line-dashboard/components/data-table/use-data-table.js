@@ -42,8 +42,8 @@ function normalizeTablePayload(payload) {
 
   const normalizedRows = Array.isArray(payload.rows)
     ? payload.rows
-        .filter((row) => row && typeof row === "object")
-        .map((row) => ({ ...row }))
+      .filter((row) => row && typeof row === "object")
+      .map((row) => ({ ...row }))
     : []
 
   const rowCountRaw = Number(payload.rowCount)
@@ -63,6 +63,17 @@ function normalizeTablePayload(payload) {
     rows: normalizedRows,
   }
 }
+
+function makeEqpCb(eqpId, chamberIds) {
+  const a = (eqpId ?? "").toString().trim();
+  const b = (chamberIds ?? "").toString().trim();
+  if (a && b) return `${a}-${b}`;
+  if (a) return a;           // 한쪽만 있을 때도 자연스럽게
+  if (b) return b;
+  return "";                 // 둘 다 없으면 빈 문자열
+}
+
+
 
 export function useDataTableState({ lineId }) {
   const [selectedTable, setSelectedTable] = React.useState(DEFAULT_TABLE)
@@ -120,9 +131,9 @@ export function useDataTableState({ lineId }) {
       if (!response.ok) {
         const message =
           payload &&
-          typeof payload === "object" &&
-          "error" in payload &&
-          typeof payload.error === "string"
+            typeof payload === "object" &&
+            "error" in payload &&
+            typeof payload.error === "string"
             ? payload.error
             : `Request failed with status ${response.status}`
         throw new Error(message)
@@ -139,8 +150,30 @@ export function useDataTableState({ lineId }) {
         table,
       } = normalizeTablePayload(payload)
 
-      setColumns(fetchedColumns)
-      setRows(fetchedRows)
+      // 1) 일단 id는 숨김
+      const baseColumns = fetchedColumns.filter(
+        (column) => column && column.toLowerCase() !== "id"
+      );
+      // 2) 로우에 EQP_CB 필드 추가
+      const composedRows = fetchedRows.map((row) => {
+        const eqpId = row?.eqp_id ?? row?.EQP_ID ?? row?.EqpId;           // 혹시 대소문자/케이스가 다를 수 있어 방어
+        const chamber = row?.chamber_ids ?? row?.CHAMBER_IDS ?? row?.ChamberIds;
+        return {
+          ...row,
+          EQP_CB: makeEqpCb(eqpId, chamber),
+        };
+      });
+      // 3) 컬럼 목록에서 eqp_id, chamber_ids는 제거하고 EQP_CB를 추가
+      const columnsWithoutOriginals = baseColumns.filter((c) => {
+        const lc = c.toLowerCase();
+        return lc !== "eqp_id" && lc !== "chamber_ids";
+      });
+      // 이미 포함돼 있지 않다면 EQP_CB 추가 (원하는 위치로 배치 가능: 맨 앞/맨 뒤 등)
+      const nextColumns = columnsWithoutOriginals.includes("EQP_CB")
+        ? columnsWithoutOriginals
+        : ["EQP_CB", ...columnsWithoutOriginals];
+      setColumns(nextColumns);
+      setRows(composedRows);
       setLastFetchedCount(rowCount)
       setAppliedFrom(appliedFromValue ?? null)
       setAppliedTo(appliedToValue ?? null)
@@ -221,9 +254,9 @@ export function useDataTableState({ lineId }) {
         if (!response.ok) {
           const message =
             payload &&
-            typeof payload === "object" &&
-            "error" in payload &&
-            typeof payload.error === "string"
+              typeof payload === "object" &&
+              "error" in payload &&
+              typeof payload.error === "string"
               ? payload.error
               : `Failed to update (status ${response.status})`
           throw new Error(message)

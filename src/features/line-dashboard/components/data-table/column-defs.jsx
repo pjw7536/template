@@ -4,6 +4,16 @@ import { STEP_COLUMN_KEY_SET } from "./constants"
 import { CommentCell } from "./cells/comment-cell"
 import { NeedToSendCell } from "./cells/need-to-send-cell"
 import { formatCellValue, renderMetroStepFlow } from "./utils"
+import Link from "next/link"
+import { ExternalLink } from "lucide-react"
+
+function toHttpUrl(raw) {
+  if (raw == null) return null
+  const s = String(raw).trim()
+  if (!s) return null
+  if (/^https?:\/\//i.test(s)) return s
+  return `https://${s}`
+}
 
 export function createColumnDefs(columns) {
   const stepColumnsWithIndex = columns
@@ -27,6 +37,24 @@ export function createColumnDefs(columns) {
     },
     cell: (info) => {
       const meta = info.table.options.meta
+
+      // 🔗 defect_url: 아이콘 하이퍼링크로 표시
+      if (colKey === "defect_url") {
+        const href = toHttpUrl(info.getValue())
+        if (!href) return null
+        return (
+          <Link
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+            aria-label="Open defect URL in a new tab"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Link>
+        )
+      }
+
 
       if (colKey === "comment") {
         const rowData = info.row.original
@@ -64,7 +92,7 @@ export function createColumnDefs(columns) {
 
       return formatCellValue(info.getValue())
     },
-    enableSorting: colKey !== "comment",
+    eenableSorting: colKey !== "comment" && colKey !== "defect_url",
   })
 
   const defs = baseColumnKeys.map((key) => makeColumnDef(key))

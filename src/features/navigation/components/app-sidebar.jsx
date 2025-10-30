@@ -12,11 +12,11 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { NAVIGATION_CONFIG, mapLinesToNavigationOptions } from "../config/navigation-config"
+import { NAVIGATION_CONFIG } from "../config/navigation-config"
 
 export function AppSidebar({ lineOptions, ...props }) {
   const { user, navMain, projects } = NAVIGATION_CONFIG
-  const teams = mapLinesToNavigationOptions(lineOptions)
+  const teams = Array.isArray(lineOptions) ? lineOptions : []
 
   return (
     <ActiveLineProvider lineOptions={teams}>

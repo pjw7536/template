@@ -1,36 +1,4 @@
-import {
-  AudioWaveform,
-  BookOpen,
-  Bot,
-  Command,
-  Frame,
-  GalleryVerticalEnd,
-  Map,
-  PieChart,
-  Settings2,
-  SquareTerminal,
-} from "lucide-react"
-
-const DEFAULT_TEAMS = [
-  {
-    id: "line-01",
-    label: "LINE-01",
-    icon: GalleryVerticalEnd,
-    description: "Enterprise",
-  },
-  {
-    id: "line-02",
-    label: "LINE-02",
-    icon: AudioWaveform,
-    description: "Startup",
-  },
-  {
-    id: "line-03",
-    label: "LINE-03",
-    icon: Command,
-    description: "Free",
-  },
-]
+import { BookOpen, Bot, Frame, Settings2, SquareTerminal } from "lucide-react"
 
 export const NAVIGATION_CONFIG = {
   user: {
@@ -121,46 +89,5 @@ export const NAVIGATION_CONFIG = {
       url: "#",
       icon: Frame,
     },
-    // {
-    //   name: "Sales & Marketing",
-    //   url: "#",
-    //   icon: PieChart,
-    // },
-    // {
-    //   name: "Travel",
-    //   url: "#",
-    //   icon: Map,
-    // },
   ],
-  teams: DEFAULT_TEAMS,
-}
-
-export function mapLinesToNavigationOptions(lines) {
-  if (!Array.isArray(lines) || lines.length === 0) {
-    return DEFAULT_TEAMS
-  }
-
-  return lines
-    .map((line) => {
-      if (typeof line === "string") {
-        return { id: line, label: line }
-      }
-
-      if (line && typeof line === "object") {
-        const id = line.id ?? line.lineId ?? line.value ?? line.label ?? line.name
-        const label = line.label ?? line.name ?? id
-        if (!id || !label) {
-          return null
-        }
-
-        return {
-          id,
-          label,
-          description: line.description ?? line.plan ?? line.subtitle ?? "",
-        }
-      }
-
-      return null
-    })
-    .filter((item) => item && item.id && item.label)
 }

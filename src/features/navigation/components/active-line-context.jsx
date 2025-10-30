@@ -5,6 +5,11 @@ import { useParams } from "next/navigation"
 
 const ActiveLineContext = React.createContext(null)
 
+function normalizeLineId(value) {
+  if (value === null || value === undefined) return null
+  return typeof value === "string" ? value : String(value)
+}
+
 function getLineIdFromParams(params) {
   if (!params || typeof params !== "object") return null
   const raw = params.lineId
@@ -15,10 +20,25 @@ function getLineIdFromParams(params) {
 
 export function ActiveLineProvider({ children, lineOptions }) {
   const params = useParams()
-  const paramLineId = getLineIdFromParams(params)
-  const fallbackLineId = Array.isArray(lineOptions)
-    ? lineOptions.find((option) => option && option.id)?.id ?? null
-    : null
+  const paramLineId = normalizeLineId(getLineIdFromParams(params))
+
+  const normalizedLineOptionIds = React.useMemo(() => {
+    if (!Array.isArray(lineOptions)) return []
+    return lineOptions
+      .map((option) => {
+        if (!option) return null
+        if (typeof option === "string" || typeof option === "number") {
+          return normalizeLineId(option)
+        }
+        if (option && option.id !== undefined && option.id !== null) {
+          return normalizeLineId(option.id)
+        }
+        return null
+      })
+      .filter((id) => id !== null)
+  }, [lineOptions])
+
+  const fallbackLineId = normalizedLineOptionIds[0] ?? null
 
   const [selectedLineId, setSelectedLineId] = React.useState(() => paramLineId ?? fallbackLineId)
 
@@ -35,25 +55,22 @@ export function ActiveLineProvider({ children, lineOptions }) {
   }, [fallbackLineId, paramLineId, selectedLineId])
 
   React.useEffect(() => {
-    if (!Array.isArray(lineOptions) || !lineOptions.length) return
-    const hasSelectedLine = selectedLineId
-      ? lineOptions.some((option) => option && option.id === selectedLineId)
-      : false
+    if (!normalizedLineOptionIds.length) return
+    const hasSelectedLine = selectedLineId ? normalizedLineOptionIds.includes(selectedLineId) : false
 
     if (!hasSelectedLine) {
       const nextLineId =
-        (paramLineId && lineOptions.some((option) => option && option.id === paramLineId)
-          ? paramLineId
-          : null) ?? fallbackLineId
+        (paramLineId && normalizedLineOptionIds.includes(paramLineId) ? paramLineId : null) ??
+        fallbackLineId
 
       if (nextLineId !== selectedLineId) {
         setSelectedLineId(nextLineId ?? null)
       }
     }
-  }, [fallbackLineId, lineOptions, paramLineId, selectedLineId])
+  }, [fallbackLineId, normalizedLineOptionIds, paramLineId, selectedLineId])
 
   const setLineId = React.useCallback((nextLineId) => {
-    setSelectedLineId(nextLineId ?? null)
+    setSelectedLineId(normalizeLineId(nextLineId))
   }, [])
 
   const value = {
