@@ -1,8 +1,8 @@
 import { DataTable } from "@/features/line-dashboard/components/data-table"
 
-export default function Page({ params }) {
-  const paramValue = params?.lineId
-  const lineId = Array.isArray(paramValue) ? paramValue[0] : paramValue ?? ""
+export default async function Page({ params }) {
+  const { lineId: raw } = await params; // ← 여기!
+  const lineId = Array.isArray(raw) ? raw[0] : raw ?? "";
 
-  return <DataTable lineId={lineId} />
+  return <DataTable lineId={lineId} />;
 }
