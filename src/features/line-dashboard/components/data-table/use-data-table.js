@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import { DEFAULT_TABLE, getDefaultSinceValue } from "./constants"
+import { DEFAULT_TABLE, getDefaultFromValue, getDefaultToValue } from "./constants"
 import { useCellIndicators } from "./use-cell-indicators"
 
 function deleteKeys(record, keys) {
@@ -28,7 +28,8 @@ function normalizeTablePayload(payload) {
   if (!payload || typeof payload !== "object") {
     return {
       table: DEFAULT_TABLE,
-      since: getDefaultSinceValue(),
+      from: getDefaultFromValue(),
+      to: getDefaultToValue(),
       rowCount: 0,
       columns: [],
       rows: [],
@@ -48,18 +49,15 @@ function normalizeTablePayload(payload) {
   const rowCountRaw = Number(payload.rowCount)
   const normalizedRowCount = Number.isFinite(rowCountRaw) ? rowCountRaw : normalizedRows.length
 
-  const normalizedSince =
-    typeof payload.since === "string"
-      ? payload.since
-      : payload.since === null
-        ? null
-        : null
+  const normalizedFrom = typeof payload.from === "string" ? payload.from : null
+  const normalizedTo = typeof payload.to === "string" ? payload.to : null
 
   const normalizedTable = typeof payload.table === "string" ? payload.table : null
 
   return {
     table: normalizedTable,
-    since: normalizedSince,
+    from: normalizedFrom,
+    to: normalizedTo,
     rowCount: normalizedRowCount,
     columns: normalizedColumns,
     rows: normalizedRows,
@@ -70,8 +68,10 @@ export function useDataTableState({ lineId }) {
   const [selectedTable, setSelectedTable] = React.useState(DEFAULT_TABLE)
   const [columns, setColumns] = React.useState([])
   const [rows, setRows] = React.useState([])
-  const [since, setSince] = React.useState(() => getDefaultSinceValue())
-  const [appliedSince, setAppliedSince] = React.useState(() => getDefaultSinceValue())
+  const [fromDate, setFromDate] = React.useState(() => getDefaultFromValue())
+  const [toDate, setToDate] = React.useState(() => getDefaultToValue())
+  const [appliedFrom, setAppliedFrom] = React.useState(() => getDefaultFromValue())
+  const [appliedTo, setAppliedTo] = React.useState(() => getDefaultToValue())
   const [filter, setFilter] = React.useState("")
   const [sorting, setSorting] = React.useState([])
   const [commentDrafts, setCommentDrafts] = React.useState({})
@@ -92,8 +92,20 @@ export function useDataTableState({ lineId }) {
     setRowsError(null)
 
     try {
-      const effectiveSince = since && since.length > 0 ? since : getDefaultSinceValue()
-      const params = new URLSearchParams({ table: selectedTable, since: effectiveSince })
+      let effectiveFrom = fromDate && fromDate.length > 0 ? fromDate : null
+      let effectiveTo = toDate && toDate.length > 0 ? toDate : null
+
+      if (effectiveFrom && effectiveTo) {
+        const fromTime = new Date(`${effectiveFrom}T00:00:00Z`).getTime()
+        const toTime = new Date(`${effectiveTo}T23:59:59Z`).getTime()
+        if (Number.isFinite(fromTime) && Number.isFinite(toTime) && fromTime > toTime) {
+          ;[effectiveFrom, effectiveTo] = [effectiveTo, effectiveFrom]
+        }
+      }
+
+      const params = new URLSearchParams({ table: selectedTable })
+      if (effectiveFrom) params.set("from", effectiveFrom)
+      if (effectiveTo) params.set("to", effectiveTo)
       if (lineId) params.set("lineId", lineId)
 
       const response = await fetch(`/api/tables?${params.toString()}`, { cache: "no-store" })
@@ -122,14 +134,16 @@ export function useDataTableState({ lineId }) {
         columns: fetchedColumns,
         rows: fetchedRows,
         rowCount,
-        since: applied,
+        from: appliedFromValue,
+        to: appliedToValue,
         table,
       } = normalizeTablePayload(payload)
 
       setColumns(fetchedColumns)
       setRows(fetchedRows)
       setLastFetchedCount(rowCount)
-      setAppliedSince(applied)
+      setAppliedFrom(appliedFromValue ?? null)
+      setAppliedTo(appliedToValue ?? null)
       setCommentDrafts({})
       setCommentEditing({})
       setNeedToSendDrafts({})
@@ -147,7 +161,7 @@ export function useDataTableState({ lineId }) {
     } finally {
       if (rowsRequestRef.current === requestId) setIsLoadingRows(false)
     }
-  }, [since, selectedTable, lineId])
+  }, [fromDate, toDate, selectedTable, lineId])
 
   React.useEffect(() => {
     fetchRows()
@@ -316,9 +330,12 @@ export function useDataTableState({ lineId }) {
     selectedTable,
     columns,
     rows,
-    since,
-    setSince,
-    appliedSince,
+    fromDate,
+    setFromDate,
+    toDate,
+    setToDate,
+    appliedFrom,
+    appliedTo,
     filter,
     setFilter,
     sorting,

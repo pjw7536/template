@@ -15,7 +15,7 @@ function sanitizeIdentifier(value, fallback = null) {
   return trimmed
 }
 
-function normalizeSince(value) {
+function normalizeDateOnly(value) {
   if (typeof value !== "string") return null
   const trimmed = value.trim()
   if (!DATE_ONLY_REGEX.test(trimmed)) return null
@@ -38,13 +38,25 @@ export async function GET(request) {
   const searchParams = url.searchParams
 
   const tableParam = searchParams.get("table")
-  const sinceParam = searchParams.get("since")
+  const fromParam = searchParams.get("from")
+  const toParam = searchParams.get("to")
   const lineIdParam = searchParams.get("lineId")
 
   const tableName = sanitizeIdentifier(tableParam, DEFAULT_TABLE)
-  const normalizedSince = normalizeSince(sinceParam)
+  let normalizedFrom = normalizeDateOnly(fromParam)
+  let normalizedTo = normalizeDateOnly(toParam)
   const normalizedLineId =
     typeof lineIdParam === "string" && lineIdParam.trim().length > 0 ? lineIdParam.trim() : null
+
+  if (normalizedFrom && normalizedTo) {
+    const fromTime = new Date(`${normalizedFrom}T00:00:00Z`).getTime()
+    const toTime = new Date(`${normalizedTo}T23:59:59Z`).getTime()
+    if (Number.isFinite(fromTime) && Number.isFinite(toTime) && fromTime > toTime) {
+      const temp = normalizedFrom
+      normalizedFrom = normalizedTo
+      normalizedTo = temp
+    }
+  }
 
   try {
     const columnRows = await runQuery(`SHOW COLUMNS FROM \`${tableName}\``)
@@ -54,7 +66,7 @@ export async function GET(request) {
 
     const lineIdColumn = normalizedLineId ? findColumn(columnNames, "line_id") : null
     const dateColumn =
-      normalizedSince &&
+      (normalizedFrom || normalizedTo) &&
       DATE_COLUMN_CANDIDATES.map((candidate) => findColumn(columnNames, candidate)).find(Boolean)
 
     const filters = []
@@ -65,9 +77,14 @@ export async function GET(request) {
       params.push(normalizedLineId)
     }
 
-    if (normalizedSince && dateColumn) {
+    if (normalizedFrom && dateColumn) {
       filters.push(`\`${dateColumn}\` >= ?`)
-      params.push(`${normalizedSince} 00:00:00`)
+      params.push(`${normalizedFrom} 00:00:00`)
+    }
+
+    if (normalizedTo && dateColumn) {
+      filters.push(`\`${dateColumn}\` <= ?`)
+      params.push(`${normalizedTo} 23:59:59`)
     }
 
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : ""
@@ -94,7 +111,8 @@ export async function GET(request) {
 
     return NextResponse.json({
       table: tableName,
-      since: normalizedSince && dateColumn ? normalizedSince : null,
+      from: normalizedFrom && dateColumn ? normalizedFrom : null,
+      to: normalizedTo && dateColumn ? normalizedTo : null,
       rowCount: rows.length,
       columns: columnNames,
       rows,

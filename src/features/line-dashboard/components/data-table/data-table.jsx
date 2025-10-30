@@ -12,7 +12,11 @@ import {
 import {
   IconAlertCircle,
   IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
   IconChevronUp,
+  IconChevronsLeft,
+  IconChevronsRight,
   IconDatabase,
   IconLoader,
   IconReload,
@@ -48,22 +52,25 @@ export function DataTable({ lineId }) {
     selectedTable,
     columns,
     rows,
-    since,
-    setSince,
-    appliedSince,
+    fromDate,
+    setFromDate,
+    toDate,
+    setToDate,
+    appliedFrom,
+    appliedTo,
     filter,
     setFilter,
     sorting,
     setSorting,
     isLoadingRows,
     rowsError,
-    lastFetchedCount,
     fetchRows,
     tableMeta,
   } = useDataTableState({ lineId })
 
   const columnDefs = createColumnDefs(columns)
   const globalFilterFn = createGlobalFilterFn(columns)
+  const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize: 10 })
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -73,9 +80,11 @@ export function DataTable({ lineId }) {
     state: {
       sorting,
       globalFilter: filter,
+      pagination,
     },
     onSortingChange: setSorting,
     onGlobalFilterChange: setFilter,
+    onPaginationChange: setPagination,
     globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -87,15 +96,52 @@ export function DataTable({ lineId }) {
   const emptyStateColSpan = Math.max(table.getVisibleLeafColumns().length, 1)
   const totalLoaded = rows.length
   const hasNoRows = !isLoadingRows && rowsError === null && columns.length === 0
-  const sinceLabel = appliedSince
-    ? dateFormatter.format(new Date(`${appliedSince}T00:00:00Z`))
-    : "all time"
+  const todayInputValue = toDateInputValue(new Date())
+  const fromLabel = appliedFrom
+    ? dateFormatter.format(new Date(`${appliedFrom}T00:00:00Z`))
+    : null
+  const toLabel = appliedTo
+    ? dateFormatter.format(new Date(`${appliedTo}T00:00:00Z`))
+    : null
+  const rangeLabel = fromLabel && toLabel
+    ? `between ${fromLabel} – ${toLabel}`
+    : fromLabel
+      ? `since ${fromLabel}`
+      : toLabel
+        ? `through ${toLabel}`
+        : "for all time"
   const [lastUpdatedLabel, setLastUpdatedLabel] = React.useState(null)
+  const currentPage = pagination.pageIndex + 1
+  const totalPages = Math.max(table.getPageCount(), 1)
+  const currentPageSize = table.getRowModel().rows.length
 
   React.useEffect(() => {
     if (isLoadingRows) return
     setLastUpdatedLabel(timeFormatter.format(new Date()))
   }, [isLoadingRows])
+
+  React.useEffect(() => {
+    setPagination((prev) =>
+      prev.pageIndex === 0
+        ? prev
+        : {
+            ...prev,
+            pageIndex: 0,
+          }
+    )
+  }, [filter, sorting])
+
+  React.useEffect(() => {
+    const maxIndex = Math.max(table.getPageCount() - 1, 0)
+    setPagination((prev) =>
+      prev.pageIndex > maxIndex
+        ? {
+            ...prev,
+            pageIndex: maxIndex,
+          }
+        : prev
+    )
+  }, [table, rows.length, pagination.pageSize])
 
   return (
     <section className="flex min-w-0 flex-col gap-2 px-4 lg:px-6">
@@ -106,7 +152,7 @@ export function DataTable({ lineId }) {
             데이터 테이블 · {lineId}
           </div>
           <p className="text-sm text-muted-foreground">
-            Loaded {numberFormatter.format(totalLoaded)} rows from {selectedTable} (since {sinceLabel}).
+            Loaded {numberFormatter.format(totalLoaded)} rows from {selectedTable} ({rangeLabel}).
           </p>
         </div>
       </div>
@@ -123,11 +169,21 @@ export function DataTable({ lineId }) {
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <Input
             type="date"
-            max={toDateInputValue(new Date())}
-            value={since}
-            onChange={(event) => setSince(event.target.value)}
+            max={toDate ?? todayInputValue}
+            value={fromDate ?? ""}
+            onChange={(event) => setFromDate(event.target.value || null)}
             className="w-full sm:w-40"
-            aria-label="Since date"
+            aria-label="From date"
+          />
+
+          <Input
+            type="date"
+            min={fromDate ?? undefined}
+            max={todayInputValue}
+            value={toDate ?? ""}
+            onChange={(event) => setToDate(event.target.value || null)}
+            className="w-full sm:w-40"
+            aria-label="To date"
           />
 
           <Button variant="outline" onClick={() => void fetchRows()} disabled={isLoadingRows}>
@@ -228,8 +284,72 @@ export function DataTable({ lineId }) {
         </Table>
       </TableContainer>
 
-      <div className="flex flex-wrap items-center gap-1 justify-end text-xs text-muted-foreground">
-        <span>Updated {isLoadingRows ? "just now" : lastUpdatedLabel ?? "just now"}</span>
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>Updated {isLoadingRows ? "just now" : lastUpdatedLabel ?? "just now"}</span>
+          <span>
+            Showing {numberFormatter.format(currentPageSize)} of {numberFormatter.format(totalLoaded)} rows
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.setPageIndex(0)}
+              disabled={!table.getCanPreviousPage()}
+              aria-label="Go to first page"
+            >
+              <IconChevronsLeft className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              aria-label="Go to previous page"
+            >
+              <IconChevronLeft className="size-4" />
+            </Button>
+            <span className="px-2 text-sm font-medium">
+              Page {numberFormatter.format(currentPage)} of {numberFormatter.format(totalPages)}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              aria-label="Go to next page"
+            >
+              <IconChevronRight className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.setPageIndex(totalPages - 1)}
+              disabled={!table.getCanNextPage()}
+              aria-label="Go to last page"
+            >
+              <IconChevronsRight className="size-4" />
+            </Button>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-xs text-muted-foreground">Rows per page</span>
+            <select
+              value={pagination.pageSize}
+              onChange={(event) => table.setPageSize(Number(event.target.value))}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+            >
+              {[10, 20, 30, 40, 50].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
     </section>
   )
