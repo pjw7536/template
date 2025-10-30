@@ -7,6 +7,7 @@ const SAFE_IDENTIFIER = /^[A-Za-z0-9_]+$/
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/
 const ROW_LIMIT = 500
 const DATE_COLUMN_CANDIDATES = ["updated_at", "created_at", "timestamp", "ts", "date"]
+const LINE_SDWT_TABLE_NAME = "line_sdwt"
 
 function sanitizeIdentifier(value, fallback = null) {
   if (typeof value !== "string") return fallback
@@ -65,6 +66,7 @@ export async function GET(request) {
       .filter((value) => typeof value === "string")
 
     const lineIdColumn = normalizedLineId ? findColumn(columnNames, "line_id") : null
+    const userSdwtProdColumn = normalizedLineId ? findColumn(columnNames, "user_sdwt_prod") : null
     const dateColumn =
       (normalizedFrom || normalizedTo) &&
       DATE_COLUMN_CANDIDATES.map((candidate) => findColumn(columnNames, candidate)).find(Boolean)
@@ -72,7 +74,41 @@ export async function GET(request) {
     const filters = []
     const params = []
 
-    if (normalizedLineId && lineIdColumn) {
+    let userSdwtProds = []
+    if (normalizedLineId && userSdwtProdColumn) {
+      const mappingRows = await runQuery(
+        `
+          SELECT DISTINCT user_sdwt_prod
+          FROM ${LINE_SDWT_TABLE_NAME}
+          WHERE line_id = ?
+            AND user_sdwt_prod IS NOT NULL
+            AND user_sdwt_prod <> ''
+        `,
+        [normalizedLineId]
+      )
+
+      userSdwtProds = Array.from(
+        new Set(
+          mappingRows
+            .map((row) => (typeof row?.user_sdwt_prod === "string" ? row.user_sdwt_prod.trim() : ""))
+            .filter((value) => value.length > 0)
+        )
+      )
+
+      if (userSdwtProds.length === 0) {
+        return NextResponse.json({
+          table: tableName,
+          from: normalizedFrom && dateColumn ? normalizedFrom : null,
+          to: normalizedTo && dateColumn ? normalizedTo : null,
+          rowCount: 0,
+          columns: columnNames,
+          rows: [],
+        })
+      }
+
+      filters.push(`\`${userSdwtProdColumn}\` IN (${userSdwtProds.map(() => "?").join(", ")})`)
+      params.push(...userSdwtProds)
+    } else if (normalizedLineId && lineIdColumn) {
       filters.push(`\`${lineIdColumn}\` = ?`)
       params.push(normalizedLineId)
     }

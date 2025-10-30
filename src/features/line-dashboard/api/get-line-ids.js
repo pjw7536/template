@@ -1,12 +1,12 @@
 import { runQuery } from "@/lib/db"
 
-const DEFAULT_TABLE_NAME = "drone_sop_v3"
+const LINE_SDWT_TABLE_NAME = "line_sdwt"
 
 export async function getDistinctLineIds() {
   const rows = await runQuery(
     `
       SELECT DISTINCT line_id
-      FROM ${DEFAULT_TABLE_NAME}
+      FROM ${LINE_SDWT_TABLE_NAME}
       WHERE line_id IS NOT NULL AND line_id <> ''
       ORDER BY line_id
     `
