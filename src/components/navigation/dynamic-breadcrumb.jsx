@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo } from "react";
+import { Fragment } from "react";
 import { usePathname } from "next/navigation";
 
 import {
@@ -20,18 +20,13 @@ function toTitleCase(segment) {
 export function DynamicBreadcrumb({ overrides = {} }) {
   const pathname = usePathname();
 
-  const segments = useMemo(() => {
-    if (!pathname) return [];
-    return pathname.split("/").filter(Boolean);
-  }, [pathname]);
+  const segments = pathname ? pathname.split("/").filter(Boolean) : [];
 
-  const crumbs = useMemo(() => {
-    return segments.map((segment, index) => {
-      const href = `/${segments.slice(0, index + 1).join("/")}`;
-      const label = overrides[segment] ?? toTitleCase(segment);
-      return { href, segment, label };
-    });
-  }, [overrides, segments]);
+  const crumbs = segments.map((segment, index) => {
+    const href = `/${segments.slice(0, index + 1).join("/")}`;
+    const label = overrides[segment] ?? toTitleCase(segment);
+    return { href, segment, label };
+  });
 
   // 루트("/")면 아무것도 안 보여줌
   if (crumbs.length === 0) return null;

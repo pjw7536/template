@@ -37,33 +37,31 @@ export function TeamSwitcher({ lines }) {
   const lineParam = params?.lineId
   const { lineId: selectedLineId, setLineId: setSelectedLineId } = useActiveLine()
 
-  const options = React.useMemo(() => {
-    if (!Array.isArray(lines)) return []
-    return lines
-      .map((line) => {
-        if (!line) return null
-        if (typeof line === "string") {
-          return { id: line, label: line, description: "" }
-        }
-        const id = line.id ?? line.label ?? line.name
-        const label = line.label ?? line.name ?? id
-        const description = line.description ?? ""
-        if (!id || !label) return null
-        return { id, label, description }
-      })
-      .filter((option) => option !== null)
-  }, [lines])
+  const options = Array.isArray(lines)
+    ? lines
+        .map((line) => {
+          if (!line) return null
+          if (typeof line === "string") {
+            return { id: line, label: line, description: "" }
+          }
+          const id = line.id ?? line.label ?? line.name
+          const label = line.label ?? line.name ?? id
+          const description = line.description ?? ""
+          if (!id || !label) return null
+          return { id, label, description }
+        })
+        .filter((option) => option !== null)
+    : []
 
-  const activeLineId = React.useMemo(() => {
-    if (selectedLineId) return selectedLineId
-    if (typeof lineParam === "string") return lineParam
-    if (Array.isArray(lineParam)) return lineParam[0]
-    return options[0]?.id ?? null
-  }, [options, lineParam, selectedLineId])
+  const activeLineId = selectedLineId
+    ? selectedLineId
+    : typeof lineParam === "string"
+      ? lineParam
+      : Array.isArray(lineParam)
+        ? lineParam[0]
+        : options[0]?.id ?? null
 
-  const activeLine = React.useMemo(() => {
-    return options.find((option) => option.id === activeLineId) ?? options[0] ?? null
-  }, [options, activeLineId])
+  const activeLine = options.find((option) => option.id === activeLineId) ?? options[0] ?? null
 
   React.useEffect(() => {
     if (activeLineId && activeLineId !== selectedLineId) {

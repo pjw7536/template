@@ -296,38 +296,21 @@ export function useDataTableState({ lineId }) {
     setNeedToSendDrafts((prev) => removeKey(prev, recordId))
   }, [])
 
-  const tableMeta = React.useMemo(
-    () => ({
-      commentDrafts,
-      commentEditing,
-      needToSendDrafts,
-      updatingCells,
-      updateErrors,
-      cellIndicators,
-      clearUpdateError,
-      setCommentDraftValue,
-      removeCommentDraftValue,
-      setCommentEditingState,
-      setNeedToSendDraftValue,
-      removeNeedToSendDraftValue,
-      handleUpdate,
-    }),
-    [
-      commentDrafts,
-      commentEditing,
-      needToSendDrafts,
-      updatingCells,
-      updateErrors,
-      cellIndicators,
-      clearUpdateError,
-      setCommentDraftValue,
-      removeCommentDraftValue,
-      setCommentEditingState,
-      setNeedToSendDraftValue,
-      removeNeedToSendDraftValue,
-      handleUpdate,
-    ]
-  )
+  const tableMeta = {
+    commentDrafts,
+    commentEditing,
+    needToSendDrafts,
+    updatingCells,
+    updateErrors,
+    cellIndicators,
+    clearUpdateError,
+    setCommentDraftValue,
+    removeCommentDraftValue,
+    setCommentEditingState,
+    setNeedToSendDraftValue,
+    removeNeedToSendDraftValue,
+    handleUpdate,
+  }
 
   return {
     selectedTable,

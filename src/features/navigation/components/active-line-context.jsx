@@ -15,11 +15,10 @@ function getLineIdFromParams(params) {
 
 export function ActiveLineProvider({ children, lineOptions }) {
   const params = useParams()
-  const paramLineId = React.useMemo(() => getLineIdFromParams(params), [params])
-  const fallbackLineId = React.useMemo(() => {
-    if (!Array.isArray(lineOptions)) return null
-    return lineOptions.find((option) => option && option.id)?.id ?? null
-  }, [lineOptions])
+  const paramLineId = getLineIdFromParams(params)
+  const fallbackLineId = Array.isArray(lineOptions)
+    ? lineOptions.find((option) => option && option.id)?.id ?? null
+    : null
 
   const [selectedLineId, setSelectedLineId] = React.useState(() => paramLineId ?? fallbackLineId)
 
@@ -57,13 +56,10 @@ export function ActiveLineProvider({ children, lineOptions }) {
     setSelectedLineId(nextLineId ?? null)
   }, [])
 
-  const value = React.useMemo(
-    () => ({
-      lineId: selectedLineId ?? null,
-      setLineId,
-    }),
-    [selectedLineId, setLineId]
-  )
+  const value = {
+    lineId: selectedLineId ?? null,
+    setLineId,
+  }
 
   return <ActiveLineContext.Provider value={value}>{children}</ActiveLineContext.Provider>
 }

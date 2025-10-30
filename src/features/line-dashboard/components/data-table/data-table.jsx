@@ -62,8 +62,8 @@ export function DataTable({ lineId }) {
     tableMeta,
   } = useDataTableState({ lineId })
 
-  const columnDefs = React.useMemo(() => createColumnDefs(columns), [columns])
-  const globalFilterFn = React.useMemo(() => createGlobalFilterFn(columns), [columns])
+  const columnDefs = createColumnDefs(columns)
+  const globalFilterFn = createGlobalFilterFn(columns)
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
