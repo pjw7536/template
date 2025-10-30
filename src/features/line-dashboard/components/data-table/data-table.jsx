@@ -98,7 +98,7 @@ export function DataTable({ lineId }) {
   }, [isLoadingRows])
 
   return (
-    <section className="flex flex-col gap-2 px-4 lg:px-6">
+    <section className="flex min-w-0 flex-col gap-2 px-4 lg:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-lg font-semibold">
@@ -144,7 +144,7 @@ export function DataTable({ lineId }) {
         </div>
       ) : null}
 
-      <TableContainer className="h-[600px] overflow-auto rounded-lg border">
+      <TableContainer className="h-[600px] max-w-full overflow-auto rounded-lg border">
         <Table className="min-w-max" stickyHeader>
           <TableHeader className="sticky top-0 z-10 bg-muted/40">
             {table.getHeaderGroups().map((headerGroup) => (
