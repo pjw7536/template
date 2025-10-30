@@ -1,6 +1,3 @@
-"use client"
-
-import * as React from "react"
 import {
   AudioWaveform,
   BookOpen,
@@ -14,67 +11,62 @@ import {
   SquareTerminal,
 } from "lucide-react"
 
-import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
-import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarRail,
-} from "@/components/ui/sidebar"
+const DEFAULT_TEAMS = [
+  {
+    id: "line-01",
+    label: "LINE-01",
+    icon: GalleryVerticalEnd,
+    description: "Enterprise",
+  },
+  {
+    id: "line-02",
+    label: "LINE-02",
+    icon: AudioWaveform,
+    description: "Startup",
+  },
+  {
+    id: "line-03",
+    label: "LINE-03",
+    icon: Command,
+    description: "Free",
+  },
+]
 
-// This is sample data.
-const data = {
+export const NAVIGATION_CONFIG = {
   user: {
     name: "shadcn",
     email: "m@example.com",
     avatar: "/avatars/shadcn.jpg",
   },
-  teams: [
-    {
-      name: "Acme Inc",
-      logo: GalleryVerticalEnd,
-      plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free",
-    },
-  ],
   navMain: [
     {
       title: "E-SOP Dashboard",
       url: "/E-SOP_Dashboard",
       icon: SquareTerminal,
       isActive: true,
+      scope: "line",
       items: [
         {
           title: "Status",
           url: "/ESOP_Dashboard/status",
+          scope: "line",
         },
         {
           title: "History",
-          url: "#",
+          url: "/ESOP_Dashboard/history",
+          scope: "line",
         },
         {
           title: "Settings",
-          url: "#",
+          url: "/ESOP_Dashboard/settings",
+          scope: "line",
         },
       ],
     },
     {
       title: "Models",
       url: "/models",
-      icon: Bot
+      icon: Bot,
     },
     {
       title: "Documentation",
@@ -140,24 +132,35 @@ const data = {
     //   icon: Map,
     // },
   ],
+  teams: DEFAULT_TEAMS,
 }
 
-export function AppSidebar({
-  ...props
-}) {
-  return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
-      </SidebarHeader>
-      <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
-      </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={data.user} />
-      </SidebarFooter>
-      <SidebarRail />
-    </Sidebar>
-  );
+export function mapLinesToNavigationOptions(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return DEFAULT_TEAMS
+  }
+
+  return lines
+    .map((line) => {
+      if (typeof line === "string") {
+        return { id: line, label: line }
+      }
+
+      if (line && typeof line === "object") {
+        const id = line.id ?? line.lineId ?? line.value ?? line.label ?? line.name
+        const label = line.label ?? line.name ?? id
+        if (!id || !label) {
+          return null
+        }
+
+        return {
+          id,
+          label,
+          description: line.description ?? line.plan ?? line.subtitle ?? "",
+        }
+      }
+
+      return null
+    })
+    .filter((item) => item && item.id && item.label)
 }

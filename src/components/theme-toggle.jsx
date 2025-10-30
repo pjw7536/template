@@ -12,7 +12,8 @@ export function ThemeToggle({ className, ...props }) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    const frame = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(frame)
   }, [])
 
   const currentTheme = theme === "system" ? systemTheme : theme
@@ -24,7 +25,8 @@ export function ThemeToggle({ className, ...props }) {
         size="icon"
         aria-label="Toggle theme"
         className={cn("pointer-events-none opacity-0", className)}
-        {...props}>
+        {...props}
+      >
         <SunIcon className="size-4 rotate-0 scale-100 transition-all" />
       </Button>
     )
@@ -39,7 +41,8 @@ export function ThemeToggle({ className, ...props }) {
       aria-label="Toggle theme"
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={cn("transition-all", className)}
-      {...props}>
+      {...props}
+    >
       <span className="relative flex size-full items-center justify-center">
         <SunIcon className={cn("size-4 rotate-0 scale-100 transition-transform", isDark && "-rotate-90 scale-0")} />
         <MoonIcon className={cn("absolute size-4 rotate-90 scale-0 transition-transform", isDark && "rotate-0 scale-100")} />

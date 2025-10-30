@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useParams } from "next/navigation"
 import { ChevronRight } from "lucide-react"
 
 import {
@@ -19,17 +20,32 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 
-export function NavMain({
-  items
-}) {
+function resolveLineScopedUrl(url, scope, lineId) {
+  if (!url) return "#"
+  if (scope !== "line") return url
+  if (!lineId) return url
+
+  if (url.startsWith("/")) {
+    const normalized = url.replace(/^\/+/, "")
+    return `/${lineId}/${normalized}`
+  }
+
+  return `/${lineId}/${url}`
+}
+
+export function NavMain({ items }) {
+  const params = useParams()
+  const lineParam = params?.lineId
+  const lineId = Array.isArray(lineParam) ? lineParam[0] : lineParam
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Platform</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => {
           const hasChildren = Array.isArray(item.items) && item.items.length > 0
+          const itemHref = resolveLineScopedUrl(item.url, item.scope, lineId)
 
-          // 1) 자식이 있을 때: Collapsible + 하위 메뉴
           if (hasChildren) {
             return (
               <Collapsible
@@ -49,15 +65,27 @@ export function NavMain({
 
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      {item.items.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
+                      {item.items.map((subItem) => {
+                        const subHref = resolveLineScopedUrl(subItem.url, subItem.scope ?? item.scope, lineId)
+                        return (
+                          <SidebarMenuSubItem key={subItem.title}>
+                            <SidebarMenuSubButton asChild>
+                              <Link href={subHref}>
+                                <span>{subItem.title}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        )
+                      })}
+                      {itemHref !== "#" ? (
+                        <SidebarMenuSubItem key={`${item.title}-overview`}>
                           <SidebarMenuSubButton asChild>
-                            <Link href={subItem.url}>
-                              <span>{subItem.title}</span>
+                            <Link href={itemHref}>
+                              <span>Overview</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
-                      ))}
+                      ) : null}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -65,11 +93,10 @@ export function NavMain({
             )
           }
 
-          // 2) 자식이 없을 때: Collapsible 없이 메인으로 바로 이동
           return (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild tooltip={item.title}>
-                <Link href={item.url || "#"}>
+                <Link href={itemHref}>
                   {item.icon && <item.icon />}
                   <span>{item.title}</span>
                 </Link>
@@ -79,5 +106,5 @@ export function NavMain({
         })}
       </SidebarMenu>
     </SidebarGroup>
-  );
+  )
 }
