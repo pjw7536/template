@@ -1,10 +1,11 @@
 "use client"
 
-import { NavMain } from "./nav-main"
+import { NAVIGATION_CONFIG } from "../config/navigation-config"
 import { NavProjects } from "./nav-projects"
 import { NavUser } from "./nav-user"
 import { TeamSwitcher } from "./team-switcher"
 import { ActiveLineProvider } from "./active-line-context"
+import { NavMain } from "./nav-main"
 import {
   Sidebar,
   SidebarContent,
@@ -12,10 +13,10 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { NAVIGATION_CONFIG } from "../config/navigation-config"
 
 export function AppSidebar({ lineOptions, ...props }) {
   const { user, navMain, projects } = NAVIGATION_CONFIG
+  // 라인 목록이 없으면 빈 배열로 처리
   const teams = Array.isArray(lineOptions) ? lineOptions : []
 
   return (

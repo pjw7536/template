@@ -2,22 +2,18 @@
 
 import * as React from "react"
 
-import {
-  MIN_SAVING_VISIBLE_MS,
-  SAVED_VISIBLE_MS,
-  SAVING_DELAY_MS,
-} from "./constants"
+import { MIN_SAVING_VISIBLE_MS, SAVED_VISIBLE_MS, SAVING_DELAY_MS } from "./constants"
 
-function clearAllTimers(timers) {
-  if (timers.savingDelay) clearTimeout(timers.savingDelay)
-  if (timers.transition) clearTimeout(timers.transition)
-  if (timers.savedCleanup) clearTimeout(timers.savedCleanup)
-}
+// 각 셀 상태마다 관리하는 타이머 이름 정의
+const TIMER_NAMES = ["savingDelay", "transition", "savedCleanup"]
 
 export function useCellIndicators() {
   const [cellIndicators, setCellIndicators] = React.useState({})
+  // 비동기 콜백에서 최신 상태를 읽기 위해 ref로 별도 보관
   const cellIndicatorsRef = React.useRef(cellIndicators)
+  // 셀 키 → { savingDelay, transition, savedCleanup } 형태의 타이머 저장소
   const indicatorTimersRef = React.useRef({})
+  // begin 이후 finalize가 아직 오지 않은 셀 키 집합
   const activeIndicatorKeysRef = React.useRef(new Set())
 
   React.useEffect(() => {
@@ -25,25 +21,29 @@ export function useCellIndicators() {
   }, [cellIndicators])
 
   React.useEffect(() => {
-    const timersRef = indicatorTimersRef
-    const activeKeysRef = activeIndicatorKeysRef
-
     return () => {
-      Object.values(timersRef.current).forEach(clearAllTimers)
-      timersRef.current = {}
-      activeKeysRef.current.clear()
+      Object.keys(indicatorTimersRef.current).forEach((key) => {
+        TIMER_NAMES.forEach((timerName) => {
+          const timerId = indicatorTimersRef.current[key]?.[timerName]
+          if (timerId) clearTimeout(timerId)
+        })
+      })
+      indicatorTimersRef.current = {}
+      activeIndicatorKeysRef.current.clear()
     }
   }, [])
 
-  const getTimerEntry = React.useCallback((key) => {
-    const existing = indicatorTimersRef.current[key]
-    if (existing) return existing
+  /** 셀 키에 대응하는 타이머 버킷을 확보 */
+  const ensureTimerBucket = React.useCallback((key) => {
+    const bucket = indicatorTimersRef.current[key]
+    if (bucket) return bucket
     const created = {}
     indicatorTimersRef.current[key] = created
     return created
   }, [])
 
-  const clearTimer = React.useCallback((key, timerName) => {
+  /** 특정 타이머를 해제 */
+  const cancelTimer = React.useCallback((key, timerName) => {
     const entry = indicatorTimersRef.current[key]
     if (!entry) return
     const timer = entry[timerName]
@@ -53,7 +53,16 @@ export function useCellIndicators() {
     }
   }, [])
 
-  const removeIndicatorImmediate = React.useCallback((key, allowedStatuses) => {
+  /** 여러 타이머를 한꺼번에 해제 */
+  const cancelTimers = React.useCallback(
+    (key, timerNames = TIMER_NAMES) => {
+      timerNames.forEach((timerName) => cancelTimer(key, timerName))
+    },
+    [cancelTimer]
+  )
+
+  /** 인디케이터를 즉시 제거 (allowedStatuses가 있으면 해당 상태일 때만) */
+  const clearIndicatorImmediate = React.useCallback((key, allowedStatuses) => {
     setCellIndicators((prev) => {
       const current = prev[key]
       if (!current) return prev
@@ -65,6 +74,45 @@ export function useCellIndicators() {
       return next
     })
   }, [])
+
+  /** saving 상태가 최소 시간만큼 노출되도록 보장 */
+  const withMinimumSavingVisibility = React.useCallback(
+    (key, now, task) => {
+      const indicator = cellIndicatorsRef.current[key]
+      if (indicator?.status === "saving") {
+        const elapsed = now - indicator.visibleSince
+        const remaining = Math.max(0, MIN_SAVING_VISIBLE_MS - elapsed)
+        if (remaining > 0) {
+          const timers = ensureTimerBucket(key)
+          cancelTimers(key, ["transition"])
+          timers.transition = setTimeout(() => {
+            delete timers.transition
+            task()
+          }, remaining)
+          return
+        }
+      }
+      task()
+    },
+    [cancelTimers, ensureTimerBucket]
+  )
+
+  /** saving 지연 타이머를 걸어 UI 깜빡임을 줄인다 */
+  const scheduleSavingIndicator = React.useCallback(
+    (key) => {
+      const timers = ensureTimerBucket(key)
+      cancelTimers(key)
+      timers.savingDelay = setTimeout(() => {
+        delete timers.savingDelay
+        if (!activeIndicatorKeysRef.current.has(key)) return
+        setCellIndicators((prev) => ({
+          ...prev,
+          [key]: { status: "saving", visibleSince: Date.now() },
+        }))
+      }, SAVING_DELAY_MS)
+    },
+    [cancelTimers, ensureTimerBucket]
+  )
 
   const begin = React.useCallback(
     (keys) => {
@@ -83,21 +131,10 @@ export function useCellIndicators() {
 
       keys.forEach((key) => {
         activeIndicatorKeysRef.current.add(key)
-        const timers = getTimerEntry(key)
-        clearTimer(key, "savingDelay")
-        clearTimer(key, "transition")
-        clearTimer(key, "savedCleanup")
-        timers.savingDelay = setTimeout(() => {
-          delete timers.savingDelay
-          if (!activeIndicatorKeysRef.current.has(key)) return
-          setCellIndicators((prev) => ({
-            ...prev,
-            [key]: { status: "saving", visibleSince: Date.now() },
-          }))
-        }, SAVING_DELAY_MS)
+        scheduleSavingIndicator(key)
       })
     },
-    [clearTimer, getTimerEntry]
+    [scheduleSavingIndicator]
   )
 
   const finalize = React.useCallback(
@@ -107,30 +144,12 @@ export function useCellIndicators() {
 
       keys.forEach((key) => {
         activeIndicatorKeysRef.current.delete(key)
-        clearTimer(key, "savingDelay")
-        clearTimer(key, "transition")
-        clearTimer(key, "savedCleanup")
-        const timers = getTimerEntry(key)
-        const indicator = cellIndicatorsRef.current[key]
-
-        const runWithMinimumVisible = (task) => {
-          if (indicator && indicator.status === "saving") {
-            const elapsed = now - indicator.visibleSince
-            const wait = Math.max(0, MIN_SAVING_VISIBLE_MS - elapsed)
-            if (wait > 0) {
-              timers.transition = setTimeout(() => {
-                delete timers.transition
-                task()
-              }, wait)
-              return
-            }
-          }
-          task()
-        }
+        cancelTimers(key)
 
         if (outcome === "success") {
-          runWithMinimumVisible(() => {
+          withMinimumSavingVisibility(key, now, () => {
             if (activeIndicatorKeysRef.current.has(key)) return
+            const timers = ensureTimerBucket(key)
             setCellIndicators((prev) => ({
               ...prev,
               [key]: { status: "saved", visibleSince: Date.now() },
@@ -138,18 +157,18 @@ export function useCellIndicators() {
             timers.savedCleanup = setTimeout(() => {
               delete timers.savedCleanup
               if (activeIndicatorKeysRef.current.has(key)) return
-              removeIndicatorImmediate(key, ["saved"])
+              clearIndicatorImmediate(key, ["saved"])
             }, SAVED_VISIBLE_MS)
           })
         } else {
-          runWithMinimumVisible(() => {
+          withMinimumSavingVisibility(key, now, () => {
             if (activeIndicatorKeysRef.current.has(key)) return
-            removeIndicatorImmediate(key, ["saving"])
+            clearIndicatorImmediate(key, ["saving"])
           })
         }
       })
     },
-    [clearTimer, getTimerEntry, removeIndicatorImmediate]
+    [cancelTimers, clearIndicatorImmediate, ensureTimerBucket, withMinimumSavingVisibility]
   )
 
   return { cellIndicators, begin, finalize }

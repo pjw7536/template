@@ -25,10 +25,10 @@ export function getPool() {
       ...config,
       waitForConnections: true,
       connectionLimit: 10,
-      timezone: "Z",
+      // ✅ 한국시간 (UTC+9)
+      timezone: "+09:00",
     })
   }
-
   return pool
 }
 

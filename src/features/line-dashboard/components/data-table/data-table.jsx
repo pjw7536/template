@@ -22,7 +22,7 @@ import {
   IconReload,
 } from "@tabler/icons-react"
 
-
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -35,17 +35,40 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import {
-  dateFormatter,
-  numberFormatter,
-  timeFormatter,
-  toDateInputValue,
-} from "./constants"
-import { cn } from "@/lib/utils"
-
+import { dateFormatter, numberFormatter, timeFormatter, toDateInputValue } from "./constants"
 import { createColumnDefs } from "./column-defs"
 import { createGlobalFilterFn } from "./global-filter"
 import { useDataTableState } from "./use-data-table"
+
+const TEXT_ALIGN_CLASS = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+}
+
+const JUSTIFY_ALIGN_CLASS = {
+  left: "justify-start",
+  center: "justify-center",
+  right: "justify-end",
+}
+
+function getTextAlignClass(alignment = "left") {
+  return TEXT_ALIGN_CLASS[alignment] ?? TEXT_ALIGN_CLASS.left
+}
+
+function getJustifyClass(alignment = "left") {
+  return JUSTIFY_ALIGN_CLASS[alignment] ?? JUSTIFY_ALIGN_CLASS.left
+}
+
+function resolveHeaderAlignment(meta) {
+  const alignment = meta?.alignment
+  return alignment?.header ?? alignment?.cell ?? "left"
+}
+
+function resolveCellAlignment(meta) {
+  const alignment = meta?.alignment
+  return alignment?.cell ?? alignment?.header ?? "left"
+}
 
 export function DataTable({ lineId }) {
   const {
@@ -68,11 +91,19 @@ export function DataTable({ lineId }) {
     tableMeta,
   } = useDataTableState({ lineId })
 
-  const columnDefs = createColumnDefs(columns)
-  const globalFilterFn = createGlobalFilterFn(columns)
+  /* ===========================
+   * 테이블 정의/상태
+   * =========================== */
+  const firstRow = rows[0]
+  const columnDefs = React.useMemo(
+    () => createColumnDefs(columns, undefined, firstRow),
+    [columns, firstRow]
+  )
+  const globalFilterFn = React.useMemo(() => createGlobalFilterFn(columns), [columns])
   const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize: 10 })
 
   // eslint-disable-next-line react-hooks/incompatible-library
+  // 한 곳에서 모든 tanstack-table 설정을 모아둔다.
   const table = useReactTable({
     data: rows,
     columns: columnDefs,
@@ -93,33 +124,41 @@ export function DataTable({ lineId }) {
     columnResizeMode: "onChange",
   })
 
+  /* ===========================
+   * 파생 정보 계산
+   * =========================== */
+  const todayInputValue = toDateInputValue(new Date())
+  const rangeLabel = React.useMemo(() => {
+    const fromLabel = appliedFrom
+      ? dateFormatter.format(new Date(`${appliedFrom}T00:00:00Z`))
+      : null
+    const toLabel = appliedTo
+      ? dateFormatter.format(new Date(`${appliedTo}T00:00:00Z`))
+      : null
+    if (fromLabel && toLabel) return `between ${fromLabel} – ${toLabel}`
+    if (fromLabel) return `since ${fromLabel}`
+    if (toLabel) return `through ${toLabel}`
+    return "for all time"
+  }, [appliedFrom, appliedTo])
+
   const emptyStateColSpan = Math.max(table.getVisibleLeafColumns().length, 1)
   const totalLoaded = rows.length
   const hasNoRows = !isLoadingRows && rowsError === null && columns.length === 0
-  const todayInputValue = toDateInputValue(new Date())
-  const fromLabel = appliedFrom
-    ? dateFormatter.format(new Date(`${appliedFrom}T00:00:00Z`))
-    : null
-  const toLabel = appliedTo
-    ? dateFormatter.format(new Date(`${appliedTo}T00:00:00Z`))
-    : null
-  const rangeLabel = fromLabel && toLabel
-    ? `between ${fromLabel} – ${toLabel}`
-    : fromLabel
-      ? `since ${fromLabel}`
-      : toLabel
-        ? `through ${toLabel}`
-        : "for all time"
   const [lastUpdatedLabel, setLastUpdatedLabel] = React.useState(null)
   const currentPage = pagination.pageIndex + 1
   const totalPages = Math.max(table.getPageCount(), 1)
   const currentPageSize = table.getRowModel().rows.length
 
+  /* ===========================
+   * 사이드 이펙트
+   * =========================== */
+  // 로딩이 끝날 때마다 마지막 갱신 시각을 기록
   React.useEffect(() => {
     if (isLoadingRows) return
     setLastUpdatedLabel(timeFormatter.format(new Date()))
   }, [isLoadingRows])
 
+  // 필터/정렬 변경 시 항상 첫 페이지로 이동
   React.useEffect(() => {
     setPagination((prev) =>
       prev.pageIndex === 0
@@ -131,6 +170,7 @@ export function DataTable({ lineId }) {
     )
   }, [filter, sorting])
 
+  // 페이지 수가 줄어들면 현재 페이지를 안전한 범위로 조정
   React.useEffect(() => {
     const maxIndex = Math.max(table.getPageCount() - 1, 0)
     setPagination((prev) =>
@@ -142,6 +182,82 @@ export function DataTable({ lineId }) {
         : prev
     )
   }, [table, rows.length, pagination.pageSize])
+
+  /* ===========================
+   * 이벤트 핸들러
+   * =========================== */
+  const handleRefresh = React.useCallback(() => {
+    void fetchRows()
+  }, [fetchRows])
+
+  /* ===========================
+   * 렌더 헬퍼
+   * =========================== */
+  const renderTableBody = React.useCallback(() => {
+    if (isLoadingRows) {
+      return (
+        <TableRow>
+          <TableCell colSpan={emptyStateColSpan} className="h-26 text-center text-sm text-muted-foreground">
+            Loading rows…
+          </TableCell>
+        </TableRow>
+      )
+    }
+
+    if (rowsError) {
+      return (
+        <TableRow>
+          <TableCell colSpan={emptyStateColSpan} className="h-26 text-center text-sm text-destructive">
+            {rowsError}
+          </TableCell>
+        </TableRow>
+      )
+    }
+
+    if (hasNoRows) {
+      return (
+        <TableRow>
+          <TableCell colSpan={emptyStateColSpan} className="h-26 text-center text-sm text-muted-foreground">
+            No rows returned.
+          </TableCell>
+        </TableRow>
+      )
+    }
+
+    const visibleRows = table.getRowModel().rows
+    if (visibleRows.length === 0) {
+      return (
+        <TableRow>
+          <TableCell colSpan={emptyStateColSpan} className="h-26 text-center text-sm text-muted-foreground">
+            No rows match your filter.
+          </TableCell>
+        </TableRow>
+      )
+    }
+
+    return visibleRows.map((row) => (
+      <TableRow key={row.id}>
+        {row.getVisibleCells().map((cell) => {
+          const isEditable = Boolean(cell.column.columnDef.meta?.isEditable)
+          const cellAlignment = resolveCellAlignment(cell.column.columnDef.meta)
+          const cellTextClass = getTextAlignClass(cellAlignment)
+          return (
+            <TableCell
+              key={cell.id}
+              data-editable={isEditable ? "true" : "false"}
+              className={cn(
+                "align-top",
+                cellTextClass,
+                !isEditable && "caret-transparent focus:outline-none"
+              )}
+            >
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </TableCell>
+          )
+        })}
+      </TableRow>
+    ))
+  }, [emptyStateColSpan, hasNoRows, isLoadingRows, rowsError, table])
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-2 px-4 lg:px-6">
@@ -162,7 +278,7 @@ export function DataTable({ lineId }) {
           placeholder="Filter rows…"
           value={filter}
           onChange={(event) => table.setGlobalFilter(event.target.value)}
-          className="sm:w-80"
+          className="sm:w-50"
           aria-label="Filter table rows"
         />
 
@@ -186,7 +302,7 @@ export function DataTable({ lineId }) {
             aria-label="To date"
           />
 
-          <Button variant="outline" onClick={() => void fetchRows()} disabled={isLoadingRows}>
+          <Button variant="outline" onClick={handleRefresh} disabled={isLoadingRows}>
             {isLoadingRows ? <IconLoader className="mr-2 size-4 animate-spin" /> : <IconReload className="mr-2 size-4" />}
             Refresh
           </Button>
@@ -208,19 +324,26 @@ export function DataTable({ lineId }) {
                 {headerGroup.headers.map((header) => {
                   const canSort = header.column.getCanSort()
                   const sortDir = header.column.getIsSorted()
+                  const columnMeta = header.column.columnDef.meta
+                  const headerAlignment = resolveHeaderAlignment(columnMeta)
+                  const headerTextClass = getTextAlignClass(headerAlignment)
+                  const headerJustifyClass = getJustifyClass(headerAlignment)
+                  const headerContent = flexRender(header.column.columnDef.header, header.getContext())
                   return (
-                    <TableHead key={header.id} className="whitespace-nowrap">
+                    <TableHead key={header.id} className={cn("whitespace-nowrap", headerTextClass)}>
                       {canSort ? (
                         <button
-                          className="inline-flex items-center gap-1"
+                          className={cn("flex w-full items-center gap-1", headerJustifyClass)}
                           onClick={header.column.getToggleSortingHandler()}
                         >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {headerContent}
                           {sortDir === "asc" && <IconChevronUp className="size-4" />}
                           {sortDir === "desc" && <IconChevronDown className="size-4" />}
                         </button>
                       ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
+                        <div className={cn("flex w-full items-center gap-1", headerJustifyClass)}>
+                          {headerContent}
+                        </div>
                       )}
                       <span
                         onMouseDown={header.getResizeHandler()}
@@ -235,51 +358,7 @@ export function DataTable({ lineId }) {
           </TableHeader>
 
           <TableBody>
-            {isLoadingRows ? (
-              <TableRow>
-                <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
-                  Loading rows…
-                </TableCell>
-              </TableRow>
-            ) : rowsError ? (
-              <TableRow>
-                <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-destructive">
-                  {rowsError}
-                </TableCell>
-              </TableRow>
-            ) : hasNoRows ? (
-              <TableRow>
-                <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
-                  No rows returned.
-                </TableCell>
-              </TableRow>
-            ) : table.getRowModel().rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={emptyStateColSpan} className="h-24 text-center text-sm text-muted-foreground">
-                  No rows match your filter.
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => {
-                    const isEditable = Boolean(cell.column.columnDef.meta?.isEditable)
-                    return (
-                      <TableCell
-                        key={cell.id}
-                        data-editable={isEditable ? "true" : "false"}
-                        className={cn(
-                          "align-top",
-                          !isEditable && "caret-transparent focus:outline-none"
-                        )}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
-              ))
-            )}
+            {renderTableBody()}
           </TableBody>
         </Table>
       </TableContainer>
@@ -342,7 +421,7 @@ export function DataTable({ lineId }) {
               onChange={(event) => table.setPageSize(Number(event.target.value))}
               className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
             >
-              {[10, 20, 30, 40, 50].map((size) => (
+              {[15, 25, 30, 40, 50].map((size) => (
                 <option key={size} value={size}>
                   {size}
                 </option>
