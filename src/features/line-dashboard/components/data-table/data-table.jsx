@@ -200,9 +200,9 @@ export function DataTable({ lineId }) {
         </div>
       ) : null}
 
-      <TableContainer className="flex-1 min-h-0 max-w-full overflow-auto rounded-lg border">
+      <TableContainer className="flex-1 h-[calc(100vh-3rem)] overflow-y-auto rounded-lg border">
         <Table className="min-w-max" stickyHeader>
-          <TableHeader className="sticky top-0 z-10 bg-muted/40">
+          <TableHeader className="sticky top-0 z-10 bg-muted">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {

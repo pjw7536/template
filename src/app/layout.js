@@ -38,8 +38,8 @@ export default async function RootLayout({ children }) {
                 </div>
                 <ThemeToggle />
               </header>
-              <main className="flex-1 min-h-0 min-w-0 p-4 pt-0 overflow-hidden">
-                <div className="h-full overflow-auto">
+              <main className="flex-1 min-h-0 min-w-0 p-2 pt-0 overflow-hidden">
+                <div className="h-full overflow-hidden">
                   {children}
                 </div>
               </main>
