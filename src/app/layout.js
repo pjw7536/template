@@ -38,8 +38,10 @@ export default async function RootLayout({ children }) {
                 </div>
                 <ThemeToggle />
               </header>
-              <main className="flex min-w-0 flex-1 flex-col gap-4 p-4 pt-0">
-                {children}
+              <main className="flex-1 min-h-0 min-w-0 p-4 pt-0 overflow-hidden">
+                <div className="h-full overflow-auto">
+                  {children}
+                </div>
               </main>
             </SidebarInset>
           </AppSidebarProvider>

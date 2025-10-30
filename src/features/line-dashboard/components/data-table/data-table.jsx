@@ -125,9 +125,9 @@ export function DataTable({ lineId }) {
       prev.pageIndex === 0
         ? prev
         : {
-            ...prev,
-            pageIndex: 0,
-          }
+          ...prev,
+          pageIndex: 0,
+        }
     )
   }, [filter, sorting])
 
@@ -136,15 +136,15 @@ export function DataTable({ lineId }) {
     setPagination((prev) =>
       prev.pageIndex > maxIndex
         ? {
-            ...prev,
-            pageIndex: maxIndex,
-          }
+          ...prev,
+          pageIndex: maxIndex,
+        }
         : prev
     )
   }, [table, rows.length, pagination.pageSize])
 
   return (
-    <section className="flex min-w-0 flex-col gap-2 px-4 lg:px-6">
+    <section className="flex h-full min-h-0 min-w-0 flex-col gap-2 px-4 lg:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-lg font-semibold">
@@ -200,7 +200,7 @@ export function DataTable({ lineId }) {
         </div>
       ) : null}
 
-      <TableContainer className="h-[600px] max-w-full overflow-auto rounded-lg border">
+      <TableContainer className="flex-1 min-h-0 max-w-full overflow-auto rounded-lg border">
         <Table className="min-w-max" stickyHeader>
           <TableHeader className="sticky top-0 z-10 bg-muted/40">
             {table.getHeaderGroups().map((headerGroup) => (

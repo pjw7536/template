@@ -104,7 +104,6 @@ export async function GET(request) {
         FROM \`${tableName}\`
         ${whereClause}
         ${orderClause}
-        LIMIT ${limit}
       `,
       params
     )
