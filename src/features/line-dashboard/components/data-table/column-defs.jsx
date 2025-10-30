@@ -1,20 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { ExternalLink } from "lucide-react"
+import { ExternalLink, Check, PlayCircle, Circle, CircleDot, CircleCheck } from "lucide-react"
 
 import { STEP_COLUMN_KEY_SET } from "./constants"
 import { CommentCell } from "./cells/comment-cell"
 import { NeedToSendCell } from "./cells/need-to-send-cell"
 import { formatCellValue, renderMetroStepFlow } from "./utils"
 
-/**
- * ------------------------------------------------------------
- * Utilities: 값 정규화 / 공통 로직
- * ------------------------------------------------------------
- */
-
-/** 문자열처럼 보이는 값을 안전하게 URL로 변환 (http/https 없는 경우 https로 보정) */
+/* ----------------------- 공통 유틸 ----------------------- */
 function toHttpUrl(raw) {
   if (raw == null) return null
   const s = String(raw).trim()
@@ -23,21 +17,18 @@ function toHttpUrl(raw) {
   return `https://${s}`
 }
 
-/** 레코드 원본에서 id를 안전하게 추출 (없으면 null) */
 function getRecordId(rowOriginal) {
   const rawId = rowOriginal?.id
   if (rawId === undefined || rawId === null) return null
   return String(rawId)
 }
 
-/** 코멘트 기본값을 빈 문자열로 정규화 */
 function normalizeComment(raw) {
   if (typeof raw === "string") return raw
   if (raw == null) return ""
   return String(raw)
 }
 
-/** needtosend 기본값을 0/1 수로 정규화 */
 function normalizeNeedToSend(raw) {
   if (typeof raw === "number" && Number.isFinite(raw)) return raw
   if (typeof raw === "string") {
@@ -48,21 +39,31 @@ function normalizeNeedToSend(raw) {
   return Number.isFinite(n) ? n : 0
 }
 
-/**
- * ------------------------------------------------------------
- * Cell Renderers: 컬럼별 셀 렌더링을 한 곳에서 관리
- * ------------------------------------------------------------
- * - meta 접근, 원본 레코드, 현재 값 등을 인수로 받아 각 셀을 렌더링
- * - 새로운 특수 컬럼이 생기면 여기만 추가하면 됨
- */
+/** ✅ '1'만 참으로, 그 외(0, ".", "", null, undefined)는 거짓 */
+function normalizeBinaryFlag(raw) {
+  if (raw === 1 || raw === "1") return true
+  // 종종 '.' 문자로 들어오는 케이스 방지
+  if (raw === "." || raw === "" || raw == null) return false
+  const n = Number(raw)
+  return Number.isFinite(n) ? n === 1 : false
+}
 
+/** STATUS 문자열을 표준화: 오타/공백/대소문자 대응 */
+function normalizeStatus(raw) {
+  if (raw == null) return null
+  const s = String(raw).trim().toUpperCase().replace(/\s+/g, "_")
+  if (s === "MAIN_COMPLTE") return "MAIN_COMPLETE" // 오타 보정
+  return s
+}
+
+
+/* --------------------- 셀 렌더러 --------------------- */
 /**
  * @typedef {object} RenderArgs
- * @property {any} value            - info.getValue()
- * @property {any} rowOriginal      - info.row.original
- * @property {any} meta             - info.table.options.meta
+ * @property {any} value
+ * @property {any} rowOriginal
+ * @property {any} meta
  */
-
 const CellRenderers = {
   /** 🔗 defect_url: 아이콘 하이퍼링크 */
   defect_url: ({ value }) => {
@@ -81,11 +82,10 @@ const CellRenderers = {
     )
   },
 
-  /** 📝 comment: 인라인 에디터 셀 */
+  /** 📝 comment: 인라인 에디터 */
   comment: ({ value, rowOriginal, meta }) => {
     const recordId = getRecordId(rowOriginal)
     if (!meta || !recordId) {
-      // 편집 메타/ID가 없으면 일반 포맷으로만 표시
       return formatCellValue(value)
     }
     return (
@@ -97,7 +97,7 @@ const CellRenderers = {
     )
   },
 
-  /** ✅ needtosend: 체크/토글 셀 */
+  /** ✅ needtosend: 체크/토글 */
   needtosend: ({ value, rowOriginal, meta }) => {
     const recordId = getRecordId(rowOriginal)
     if (!meta || !recordId) {
@@ -111,9 +111,77 @@ const CellRenderers = {
       />
     )
   },
+
+  /** 🟢 send_jira: 1이면 “원형 내부 체크”, 아니면 빈 원형 */
+  send_jira: ({ value }) => {
+    const ok = normalizeBinaryFlag(value)
+    return (
+      <span
+        className={[
+          "inline-flex h-5 w-5 items-center justify-center rounded-full border",
+          ok ? "bg-emerald-500 border-emerald-500" : "border-muted-foreground/30",
+        ].join(" ")}
+        title={ok ? "Sent to JIRA" : "Not sent"}
+        aria-label={ok ? "Sent to JIRA" : "Not sent"}
+        role="img"
+      >
+        {ok ? <Check className="h-3 w-3 text-white" strokeWidth={3} /> : null}
+      </span>
+    )
+  },
+
+  /** 🧭 status: 상태별 아이콘/색상 */
+  status: ({ value }) => {
+    const st = normalizeStatus(value)
+
+    // 상태별 아이콘/색상/레이블 매핑
+    const map = {
+      ESOP_STARTED: {
+        icon: Check,
+        className: "text-blue-600",
+        label: "ESOP Started",
+      },
+      MAIN_COMPLETE: {
+        icon: Circle,
+        className: "text-amber-500",
+        label: "Main Complete",
+      },
+      PARTIAL_COMPLETE: {
+        icon: CircleDot,
+        className: "text-teal-600",
+        label: "Partial Complete",
+      },
+      COMPLETE: {
+        icon: CircleCheck,
+        className: "text-emerald-600",
+        label: "Complete",
+      },
+    }
+
+    const fallback = {
+      icon: Circle,
+      className: "text-muted-foreground",
+      label: st || "Unknown",
+    }
+
+    const { icon: IconCmp, className, label } = map[st] ?? fallback
+
+    return (
+      <span
+        className="inline-flex items-center gap-2"
+        title={label}
+        aria-label={label}
+        role="img"
+      >
+        <IconCmp className={`h-5 w-5 ${className}`} />
+
+        <span className="text-sm text-foreground/80">{label}</span>
+      </span>
+    )
+  },
 }
 
-/** 컬럼 키에 맞는 셀 렌더러를 가져오되, 없으면 기본 포맷터 사용 */
+/** 컬럼 키에 맞는 셀 렌더러 선택 (없으면 기본 포맷) */
 function renderCellByKey(colKey, info) {
   const meta = info.table?.options?.meta
   const value = info.getValue()
@@ -125,30 +193,22 @@ function renderCellByKey(colKey, info) {
   return formatCellValue(value)
 }
 
-/**
- * ------------------------------------------------------------
- * Step Columns: main_step / metro_steps를 하나의 흐름 컬럼으로 병합
- * ------------------------------------------------------------
- */
-
-/** 열 목록에서 스텝 관련 열들만 추출(키/인덱스) */
+/* --------------------- 스텝 병합 관련 --------------------- */
 function pickStepColumnsWithIndex(columns) {
   return columns
     .map((key, index) => ({ key, index }))
     .filter(({ key }) => STEP_COLUMN_KEY_SET.has(key))
 }
 
-/** 스텝 열을 단일 "flow" 컬럼으로 대체해야 하는지 판단 */
 function shouldCombineSteps(stepCols) {
   if (!stepCols.length) return false
   return stepCols.some(({ key }) => key === "main_step") || stepCols.some(({ key }) => key === "metro_steps")
 }
 
-/** 스텝 플로우 컬럼 정의 생성 */
 function makeStepFlowColumn(stepCols) {
-  const headerLabel = stepCols[0]?.key ?? "Step Flow"
+  const headerLabel = "process_flow"
   return {
-    id: "metro_step_flow",
+    id: "process_flow",
     header: () => headerLabel,
     accessorFn: (row) => row?.["main_step"] ?? row?.["metro_steps"] ?? null,
     cell: (info) => renderMetroStepFlow(info.row.original),
@@ -157,46 +217,32 @@ function makeStepFlowColumn(stepCols) {
   }
 }
 
-/**
- * ------------------------------------------------------------
- * Column Factory
- * ------------------------------------------------------------
- */
-
-/** 개별 컬럼 정의 생성기 (특수 렌더링/편집 메타/정렬 여부 포함) */
+/* --------------------- 컬럼 팩토리 --------------------- */
 function makeColumnDef(colKey) {
   return {
     id: colKey,
     header: () => colKey,
     accessorFn: (row) => row?.[colKey],
     meta: {
-      // 편집 가능 컬럼만 true
       isEditable: colKey === "comment" || colKey === "needtosend",
     },
     cell: (info) => renderCellByKey(colKey, info),
+    // 필요시 정렬 끄기: send_jira는 아이콘이라 끄고 싶다면 아래 조건에 추가
     enableSorting: colKey !== "comment" && colKey !== "defect_url",
   }
 }
 
-/**
- * ------------------------------------------------------------
- * Public API
- * ------------------------------------------------------------
- * @param {string[]} columns - 서버/스키마에서 넘어온 전체 컬럼 키 배열
- * @returns {import("@tanstack/react-table").ColumnDef<any, any>[]}
- */
+/* --------------------- Public API --------------------- */
 export function createColumnDefs(columns) {
   const stepCols = pickStepColumnsWithIndex(columns)
   const combineSteps = shouldCombineSteps(stepCols)
 
-  // 스텝을 합칠 때는 스텝 관련 키를 제외하고 기본 컬럼 생성
   const baseKeys = combineSteps
     ? columns.filter((key) => !STEP_COLUMN_KEY_SET.has(key))
     : [...columns]
 
   const defs = baseKeys.map((key) => makeColumnDef(key))
 
-  // 스텝 플로우 컬럼을 원래 스텝 컬럼 중 가장 앞 인덱스에 삽입
   if (combineSteps) {
     const insertionIndex = stepCols.length
       ? Math.min(...stepCols.map(({ index }) => index))
