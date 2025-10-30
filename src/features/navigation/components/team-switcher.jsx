@@ -19,6 +19,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
+import { useActiveLine } from "./active-line-context"
 
 function getInitials(label) {
   if (!label) return "?"
@@ -34,6 +35,7 @@ export function TeamSwitcher({ lines }) {
   const pathname = usePathname()
   const params = useParams()
   const lineParam = params?.lineId
+  const { lineId: selectedLineId, setLineId: setSelectedLineId } = useActiveLine()
 
   const options = React.useMemo(() => {
     if (!Array.isArray(lines)) return []
@@ -53,18 +55,27 @@ export function TeamSwitcher({ lines }) {
   }, [lines])
 
   const activeLineId = React.useMemo(() => {
+    if (selectedLineId) return selectedLineId
     if (typeof lineParam === "string") return lineParam
     if (Array.isArray(lineParam)) return lineParam[0]
     return options[0]?.id ?? null
-  }, [options, lineParam])
+  }, [options, lineParam, selectedLineId])
 
   const activeLine = React.useMemo(() => {
     return options.find((option) => option.id === activeLineId) ?? options[0] ?? null
   }, [options, activeLineId])
 
+  React.useEffect(() => {
+    if (activeLineId && activeLineId !== selectedLineId) {
+      setSelectedLineId(activeLineId)
+    }
+  }, [activeLineId, selectedLineId, setSelectedLineId])
+
   const handleSelect = React.useCallback(
     (lineId) => {
       if (!lineId || lineId === activeLineId) return
+
+      setSelectedLineId(lineId)
 
       if (!pathname) {
         router.push(`/${lineId}/ESOP_Dashboard/status`)
@@ -82,7 +93,7 @@ export function TeamSwitcher({ lines }) {
 
       router.push(`/${lineId}/ESOP_Dashboard/status`)
     },
-    [activeLineId, lineParam, pathname, router]
+    [activeLineId, lineParam, pathname, router, setSelectedLineId]
   )
 
   if (!activeLine) {

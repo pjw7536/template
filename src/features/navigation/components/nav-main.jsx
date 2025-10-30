@@ -19,6 +19,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
+import { useActiveLine } from "./active-line-context"
 
 function resolveLineScopedUrl(url, scope, lineId) {
   if (!url) return "#"
@@ -37,6 +38,8 @@ export function NavMain({ items }) {
   const params = useParams()
   const lineParam = params?.lineId
   const lineId = Array.isArray(lineParam) ? lineParam[0] : lineParam
+  const { lineId: selectedLineId } = useActiveLine()
+  const resolvedLineId = lineId ?? selectedLineId
 
   return (
     <SidebarGroup>
@@ -44,7 +47,7 @@ export function NavMain({ items }) {
       <SidebarMenu>
         {items.map((item) => {
           const hasChildren = Array.isArray(item.items) && item.items.length > 0
-          const itemHref = resolveLineScopedUrl(item.url, item.scope, lineId)
+          const itemHref = resolveLineScopedUrl(item.url, item.scope, resolvedLineId)
 
           if (hasChildren) {
             return (
@@ -66,7 +69,11 @@ export function NavMain({ items }) {
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       {item.items.map((subItem) => {
-                        const subHref = resolveLineScopedUrl(subItem.url, subItem.scope ?? item.scope, lineId)
+                        const subHref = resolveLineScopedUrl(
+                          subItem.url,
+                          subItem.scope ?? item.scope,
+                          resolvedLineId
+                        )
                         return (
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton asChild>

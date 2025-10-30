@@ -4,6 +4,7 @@ import { NavMain } from "./nav-main"
 import { NavProjects } from "./nav-projects"
 import { NavUser } from "./nav-user"
 import { TeamSwitcher } from "./team-switcher"
+import { ActiveLineProvider } from "./active-line-context"
 import {
   Sidebar,
   SidebarContent,
@@ -18,18 +19,20 @@ export function AppSidebar({ lineOptions, ...props }) {
   const teams = mapLinesToNavigationOptions(lineOptions)
 
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <TeamSwitcher lines={teams} />
-      </SidebarHeader>
-      <SidebarContent>
-        <NavMain items={navMain} />
-        <NavProjects projects={projects} />
-      </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={user} />
-      </SidebarFooter>
-      <SidebarRail />
-    </Sidebar>
+    <ActiveLineProvider lineOptions={teams}>
+      <Sidebar collapsible="icon" {...props}>
+        <SidebarHeader>
+          <TeamSwitcher lines={teams} />
+        </SidebarHeader>
+        <SidebarContent>
+          <NavMain items={navMain} />
+          <NavProjects projects={projects} />
+        </SidebarContent>
+        <SidebarFooter>
+          <NavUser user={user} />
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+    </ActiveLineProvider>
   )
 }
