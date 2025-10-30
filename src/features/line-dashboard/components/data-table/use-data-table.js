@@ -1,38 +1,13 @@
 "use client"
 
 import * as React from "react"
-import type { SortingState } from "@tanstack/react-table"
 
 import { DEFAULT_TABLE, getDefaultSinceValue } from "./constants"
-import type { DataTableMeta, HandleUpdateFn } from "./types"
-import { tableDataSchema } from "./types"
 import { useCellIndicators } from "./use-cell-indicators"
 
-type UseDataTableArgs = {
-  lineId: string
-}
-
-type UseDataTableReturn = {
-  selectedTable: string
-  columns: string[]
-  rows: Array<Record<string, unknown>>
-  since: string
-  setSince: React.Dispatch<React.SetStateAction<string>>
-  appliedSince: string | null
-  filter: string
-  setFilter: React.Dispatch<React.SetStateAction<string>>
-  sorting: SortingState
-  setSorting: React.Dispatch<React.SetStateAction<SortingState>>
-  isLoadingRows: boolean
-  rowsError: string | null
-  lastFetchedCount: number
-  fetchRows: () => Promise<void>
-  tableMeta: DataTableMeta
-}
-
-function deleteKeys<TValue>(record: Record<string, TValue>, keys: string[]) {
+function deleteKeys(record, keys) {
   if (keys.length === 0) return record
-  let next: Record<string, TValue> | null = null
+  let next = null
   keys.forEach((key) => {
     if (key in record) {
       if (next === null) next = { ...record }
@@ -42,30 +17,70 @@ function deleteKeys<TValue>(record: Record<string, TValue>, keys: string[]) {
   return next ?? record
 }
 
-function removeKey<TValue>(record: Record<string, TValue>, key: string) {
+function removeKey(record, key) {
   if (!(key in record)) return record
   const next = { ...record }
   delete next[key]
   return next
 }
 
-export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableReturn {
-  const [selectedTable, setSelectedTable] = React.useState<string>(DEFAULT_TABLE)
-  const [columns, setColumns] = React.useState<string[]>([])
-  const [rows, setRows] = React.useState<Array<Record<string, unknown>>>([])
-  const [since, setSince] = React.useState<string>(() => getDefaultSinceValue())
-  const [appliedSince, setAppliedSince] = React.useState<string | null>(
-    () => getDefaultSinceValue()
-  )
+function normalizeTablePayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    return {
+      table: DEFAULT_TABLE,
+      since: getDefaultSinceValue(),
+      rowCount: 0,
+      columns: [],
+      rows: [],
+    }
+  }
+
+  const normalizedColumns = Array.isArray(payload.columns)
+    ? payload.columns.filter((value) => typeof value === "string")
+    : []
+
+  const normalizedRows = Array.isArray(payload.rows)
+    ? payload.rows
+        .filter((row) => row && typeof row === "object")
+        .map((row) => ({ ...row }))
+    : []
+
+  const rowCountRaw = Number(payload.rowCount)
+  const normalizedRowCount = Number.isFinite(rowCountRaw) ? rowCountRaw : normalizedRows.length
+
+  const normalizedSince =
+    typeof payload.since === "string"
+      ? payload.since
+      : payload.since === null
+        ? null
+        : null
+
+  const normalizedTable = typeof payload.table === "string" ? payload.table : null
+
+  return {
+    table: normalizedTable,
+    since: normalizedSince,
+    rowCount: normalizedRowCount,
+    columns: normalizedColumns,
+    rows: normalizedRows,
+  }
+}
+
+export function useDataTableState({ lineId }) {
+  const [selectedTable, setSelectedTable] = React.useState(DEFAULT_TABLE)
+  const [columns, setColumns] = React.useState([])
+  const [rows, setRows] = React.useState([])
+  const [since, setSince] = React.useState(() => getDefaultSinceValue())
+  const [appliedSince, setAppliedSince] = React.useState(() => getDefaultSinceValue())
   const [filter, setFilter] = React.useState("")
-  const [sorting, setSorting] = React.useState<SortingState>([])
-  const [commentDrafts, setCommentDrafts] = React.useState<Record<string, string>>({})
-  const [commentEditing, setCommentEditing] = React.useState<Record<string, boolean>>({})
-  const [needToSendDrafts, setNeedToSendDrafts] = React.useState<Record<string, number>>({})
-  const [updatingCells, setUpdatingCells] = React.useState<Record<string, boolean>>({})
-  const [updateErrors, setUpdateErrors] = React.useState<Record<string, string>>({})
+  const [sorting, setSorting] = React.useState([])
+  const [commentDrafts, setCommentDrafts] = React.useState({})
+  const [commentEditing, setCommentEditing] = React.useState({})
+  const [needToSendDrafts, setNeedToSendDrafts] = React.useState({})
+  const [updatingCells, setUpdatingCells] = React.useState({})
+  const [updateErrors, setUpdateErrors] = React.useState({})
   const [isLoadingRows, setIsLoadingRows] = React.useState(false)
-  const [rowsError, setRowsError] = React.useState<string | null>(null)
+  const [rowsError, setRowsError] = React.useState(null)
   const [lastFetchedCount, setLastFetchedCount] = React.useState(0)
 
   const rowsRequestRef = React.useRef(0)
@@ -82,7 +97,7 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
       if (lineId) params.set("lineId", lineId)
 
       const response = await fetch(`/api/tables?${params.toString()}`, { cache: "no-store" })
-      let payload: unknown = {}
+      let payload = {}
 
       try {
         payload = await response.json()
@@ -92,14 +107,15 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
 
       if (!response.ok) {
         const message =
-          typeof (payload as { error?: unknown }).error === "string"
-            ? (payload as { error: string }).error
+          payload &&
+          typeof payload === "object" &&
+          "error" in payload &&
+          typeof payload.error === "string"
+            ? payload.error
             : `Request failed with status ${response.status}`
         throw new Error(message)
       }
 
-      const parsed = tableDataSchema.safeParse(payload)
-      if (!parsed.success) throw new Error("Received unexpected data from server")
       if (rowsRequestRef.current !== requestId) return
 
       const {
@@ -108,7 +124,7 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
         rowCount,
         since: applied,
         table,
-      } = parsed.data
+      } = normalizeTablePayload(payload)
 
       setColumns(fetchedColumns)
       setRows(fetchedRows)
@@ -134,16 +150,16 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
   }, [since, selectedTable, lineId])
 
   React.useEffect(() => {
-    void fetchRows()
+    fetchRows()
   }, [fetchRows])
 
-  const clearUpdateError = React.useCallback((key: string) => {
+  const clearUpdateError = React.useCallback((key) => {
     setUpdateErrors((prev) => removeKey(prev, key))
   }, [])
 
-  const handleUpdate = React.useCallback<HandleUpdateFn>(
+  const handleUpdate = React.useCallback(
     async (recordId, updates) => {
-      const fields = Object.keys(updates) as Array<"comment" | "needtosend">
+      const fields = Object.keys(updates)
       if (!recordId || fields.length === 0) return false
 
       const cellKeys = fields.map((field) => `${recordId}:${field}`)
@@ -181,7 +197,7 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
           }),
         })
 
-        let payload: unknown = {}
+        let payload = {}
         try {
           payload = await response.json()
         } catch {
@@ -190,15 +206,18 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
 
         if (!response.ok) {
           const message =
-            typeof (payload as { error?: unknown }).error === "string"
-              ? (payload as { error: string }).error
+            payload &&
+            typeof payload === "object" &&
+            "error" in payload &&
+            typeof payload.error === "string"
+              ? payload.error
               : `Failed to update (status ${response.status})`
           throw new Error(message)
         }
 
         setRows((previousRows) =>
           previousRows.map((row) => {
-            const rowId = String((row as { id?: unknown }).id ?? "")
+            const rowId = String(row?.id ?? "")
             if (rowId !== recordId) return row
             return {
               ...row,
@@ -219,8 +238,7 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
         updateSucceeded = true
         return true
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to update"
+        const message = error instanceof Error ? error.message : "Failed to update"
 
         setUpdateErrors((prev) => {
           const next = { ...prev }
@@ -232,16 +250,14 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
 
         return false
       } finally {
-        setUpdatingCells((prev) => {
-          return deleteKeys(prev, cellKeys)
-        })
+        setUpdatingCells((prev) => deleteKeys(prev, cellKeys))
         finalize(cellKeys, updateSucceeded ? "success" : "error")
       }
     },
     [selectedTable, begin, finalize]
   )
 
-  const setCommentEditingState = React.useCallback((recordId: string, editing: boolean) => {
+  const setCommentEditingState = React.useCallback((recordId, editing) => {
     if (!recordId) return
     setCommentEditing((prev) => {
       if (editing) {
@@ -254,7 +270,7 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
     })
   }, [])
 
-  const setCommentDraftValue = React.useCallback((recordId: string, value: string) => {
+  const setCommentDraftValue = React.useCallback((recordId, value) => {
     if (!recordId) return
     setCommentDrafts((prev) => ({
       ...prev,
@@ -262,12 +278,12 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
     }))
   }, [])
 
-  const removeCommentDraftValue = React.useCallback((recordId: string) => {
+  const removeCommentDraftValue = React.useCallback((recordId) => {
     if (!recordId) return
     setCommentDrafts((prev) => removeKey(prev, recordId))
   }, [])
 
-  const setNeedToSendDraftValue = React.useCallback((recordId: string, value: number) => {
+  const setNeedToSendDraftValue = React.useCallback((recordId, value) => {
     if (!recordId) return
     setNeedToSendDrafts((prev) => ({
       ...prev,
@@ -275,12 +291,12 @@ export function useDataTableState({ lineId }: UseDataTableArgs): UseDataTableRet
     }))
   }, [])
 
-  const removeNeedToSendDraftValue = React.useCallback((recordId: string) => {
+  const removeNeedToSendDraftValue = React.useCallback((recordId) => {
     if (!recordId) return
     setNeedToSendDrafts((prev) => removeKey(prev, recordId))
   }, [])
 
-  const tableMeta = React.useMemo<DataTableMeta>(
+  const tableMeta = React.useMemo(
     () => ({
       commentDrafts,
       commentEditing,

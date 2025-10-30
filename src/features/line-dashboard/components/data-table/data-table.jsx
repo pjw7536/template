@@ -25,6 +25,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableHeader,
   TableRow,
@@ -36,15 +37,13 @@ import {
   timeFormatter,
   toDateInputValue,
 } from "./constants"
+import { cn } from "@/lib/utils"
+
 import { createColumnDefs } from "./column-defs"
 import { createGlobalFilterFn } from "./global-filter"
 import { useDataTableState } from "./use-data-table"
 
-type DataTableProps = {
-  lineId: string
-}
-
-export function DataTable({ lineId }: DataTableProps) {
+export function DataTable({ lineId }) {
   const {
     selectedTable,
     columns,
@@ -91,7 +90,7 @@ export function DataTable({ lineId }: DataTableProps) {
   const sinceLabel = appliedSince
     ? dateFormatter.format(new Date(`${appliedSince}T00:00:00Z`))
     : "all time"
-  const [lastUpdatedLabel, setLastUpdatedLabel] = React.useState<string | null>(null)
+  const [lastUpdatedLabel, setLastUpdatedLabel] = React.useState(null)
 
   React.useEffect(() => {
     if (isLoadingRows) return
@@ -145,15 +144,14 @@ export function DataTable({ lineId }: DataTableProps) {
         </div>
       ) : null}
 
-      <div className="h-[600px] overflow-auto rounded-lg border">
-        <div className="min-w-max">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-muted/40">
+      <TableContainer className="h-[600px] overflow-auto rounded-lg border">
+        <Table className="min-w-max" stickyHeader>
+          <TableHeader className="sticky top-0 z-10 bg-muted/40">
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
                     const canSort = header.column.getCanSort()
-                    const sortDir = header.column.getIsSorted() as false | "asc" | "desc"
+                    const sortDir = header.column.getIsSorted()
                     return (
                       <TableHead key={header.id} className="whitespace-nowrap">
                         {canSort ? (
@@ -208,16 +206,27 @@ export function DataTable({ lineId }: DataTableProps) {
               ) : (
                 table.getRowModel().rows.map((row) => (
                   <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                    ))}
+                    {row.getVisibleCells().map((cell) => {
+                      const isEditable = Boolean(cell.column.columnDef.meta?.isEditable)
+                      return (
+                        <TableCell
+                          key={cell.id}
+                          data-editable={isEditable ? "true" : "false"}
+                          className={cn(
+                            "align-top",
+                            !isEditable && "caret-transparent focus:outline-none"
+                          )}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      )
+                    })}
                   </TableRow>
                 ))
               )}
             </TableBody>
-          </Table>
-        </div>
-      </div>
+        </Table>
+      </TableContainer>
 
       <div className="flex flex-wrap items-center gap-1 justify-end text-xs text-muted-foreground">
         <Badge variant="outline">{numberFormatter.format(lastFetchedCount)} fetched</Badge>

@@ -14,22 +14,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import type { LineSummary, LineTrendPoint } from "../types"
 
-type LineSummaryCardsProps = {
-  lineId: string
-  summary: LineSummary
-  trend: LineTrendPoint[]
-}
+const numberFormatter = new Intl.NumberFormat("en-US")
 
-const numberFormatter = new Intl.NumberFormat()
-
-const formatDelta = (delta: number) => {
+const formatDelta = (delta) => {
   if (delta === 0) return "0"
   return delta > 0 ? `+${numberFormatter.format(delta)}` : numberFormatter.format(delta)
 }
 
-export function LineSummaryCards({ lineId, summary, trend }: LineSummaryCardsProps) {
+export function LineSummaryCards({ lineId, summary, trend }) {
   const sortedTrend = [...trend].sort((a, b) => a.date.localeCompare(b.date))
   const latestPoint = sortedTrend.at(-1)
   const previousPoint = sortedTrend.at(-2)

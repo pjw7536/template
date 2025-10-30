@@ -12,15 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 
-import type { DataTableMeta } from "../types"
-
-type CommentCellProps = {
-  meta: DataTableMeta
-  recordId: string
-  baseValue: string
-}
-
-export function CommentCell({ meta, recordId, baseValue }: CommentCellProps) {
+export function CommentCell({ meta, recordId, baseValue }) {
   const isEditing = Boolean(meta.commentEditing[recordId])
   const draftValue = meta.commentDrafts[recordId]
   const value = isEditing ? draftValue ?? baseValue : baseValue
@@ -29,7 +21,7 @@ export function CommentCell({ meta, recordId, baseValue }: CommentCellProps) {
   const indicator = meta.cellIndicators[`${recordId}:comment`]
   const indicatorStatus = indicator?.status
   const [showSuccessIndicator, setShowSuccessIndicator] = React.useState(false)
-  const successDismissTimerRef = React.useRef<number | null>(null)
+  const successDismissTimerRef = React.useRef(null)
 
   React.useEffect(() => {
     if (!isEditing) {

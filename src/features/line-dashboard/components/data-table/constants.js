@@ -3,7 +3,7 @@ export const DEFAULT_SINCE_DAYS = 3
 
 const DAY_IN_MS = 86_400_000
 
-export const toDateInputValue = (date: Date) => date.toISOString().split("T")[0]!
+export const toDateInputValue = (date) => date.toISOString().split("T")[0]
 
 export const getDefaultSinceValue = () => {
   const now = new Date()
@@ -22,18 +22,18 @@ export const STEP_COLUMN_KEYS = [
   "metro_end_step",
   "custom_end_step",
   "inform_step",
-] as const
+]
 
-export const STEP_COLUMN_KEY_SET = new Set<string>(STEP_COLUMN_KEYS)
+export const STEP_COLUMN_KEY_SET = new Set(STEP_COLUMN_KEYS)
 
-export const numberFormatter = new Intl.NumberFormat()
-export const timeFormatter = new Intl.DateTimeFormat(undefined, {
+export const numberFormatter = new Intl.NumberFormat("en-US")
+export const timeFormatter = new Intl.DateTimeFormat("en-US", {
   hour: "2-digit",
   minute: "2-digit",
   second: "2-digit",
 })
 
-export const dateFormatter = new Intl.DateTimeFormat(undefined, {
+export const dateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "2-digit",
   day: "2-digit",

@@ -1,9 +1,7 @@
-import type { Row } from "@tanstack/react-table"
-
 import { searchableValue } from "./utils"
 
-export const createGlobalFilterFn = (columns: string[]) =>
-  (row: Row<Record<string, unknown>>, _columnId: string, filterValue: string) => {
+export const createGlobalFilterFn = (columns) =>
+  (row, _columnId, filterValue) => {
     if (!filterValue) return true
     const lc = String(filterValue).toLowerCase()
     return columns.some((key) => {

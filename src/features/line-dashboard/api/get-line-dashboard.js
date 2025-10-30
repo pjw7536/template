@@ -1,44 +1,16 @@
 import { runQuery } from "@/lib/db"
-import type {
-  LineDashboardData,
-  LineRecentItem,
-  LineSummary,
-  LineTrendPoint,
-} from "../types"
 
 const DEFAULT_TABLE_NAME = "drone_sop_v3"
 const TREND_LOOKBACK_DAYS = 90
 const RECENT_LIMIT = 10
 
-type RawSummaryRow = {
-  totalCount: number | string | null
-  activeCount: number | string | null
-  completedCount: number | string | null
-  pendingJiraCount: number | string | null
-  lotCount: number | string | null
-  latestUpdatedAt: Date | null
-}
-
-type RawTrendRow = {
-  day: string | Date
-  activeCount: number | string | null
-  completedCount: number | string | null
-}
-
-type RawRecentRow = {
-  id: number
-  lot_id: string | null
-  status: string | null
-  created_at: Date | null
-}
-
-const toISODate = (input: string | Date | null) => {
+const toISODate = (input) => {
   if (!input) return null
   const date = input instanceof Date ? input : new Date(input)
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
-const mapSummaryRow = (row: RawSummaryRow): LineSummary => ({
+const mapSummaryRow = (row) => ({
   totalCount: Number(row.totalCount ?? 0),
   activeCount: Number(row.activeCount ?? 0),
   completedCount: Number(row.completedCount ?? 0),
@@ -47,14 +19,14 @@ const mapSummaryRow = (row: RawSummaryRow): LineSummary => ({
   latestUpdatedAt: toISODate(row.latestUpdatedAt),
 })
 
-const mapTrendRows = (rows: RawTrendRow[]): LineTrendPoint[] =>
+const mapTrendRows = (rows) =>
   rows.map((row) => ({
     date: toISODate(row.day)?.slice(0, 10) ?? "",
     activeCount: Number(row.activeCount ?? 0),
     completedCount: Number(row.completedCount ?? 0),
   }))
 
-const mapRecentRows = (rows: RawRecentRow[]): LineRecentItem[] =>
+const mapRecentRows = (rows) =>
   rows.map((row) => ({
     id: row.id,
     lotId: row.lot_id ?? null,
@@ -62,8 +34,8 @@ const mapRecentRows = (rows: RawRecentRow[]): LineRecentItem[] =>
     createdAt: toISODate(row.created_at) ?? "",
   }))
 
-export async function getLineDashboard(lineId: string): Promise<LineDashboardData | null> {
-  const [summaryRow] = await runQuery<RawSummaryRow[]>(
+export async function getLineDashboard(lineId) {
+  const [summaryRow] = await runQuery(
     `
       SELECT
         COUNT(*) AS totalCount,
@@ -82,7 +54,7 @@ export async function getLineDashboard(lineId: string): Promise<LineDashboardDat
     return null
   }
 
-  const trendRows = await runQuery<RawTrendRow[]>(
+  const trendRows = await runQuery(
     `
       SELECT
         DATE(created_at) AS day,
@@ -97,7 +69,7 @@ export async function getLineDashboard(lineId: string): Promise<LineDashboardDat
     [lineId, TREND_LOOKBACK_DAYS]
   )
 
-  const recentRows = await runQuery<RawRecentRow[]>(
+  const recentRows = await runQuery(
     `
       SELECT
         id,

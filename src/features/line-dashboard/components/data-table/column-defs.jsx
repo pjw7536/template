@@ -1,14 +1,11 @@
 "use client"
 
-import type { ColumnDef } from "@tanstack/react-table"
-
 import { STEP_COLUMN_KEY_SET } from "./constants"
 import { CommentCell } from "./cells/comment-cell"
 import { NeedToSendCell } from "./cells/need-to-send-cell"
-import type { DataTableMeta } from "./types"
 import { formatCellValue, renderMetroStepFlow } from "./utils"
 
-export function createColumnDefs(columns: string[]): ColumnDef<Record<string, unknown>>[] {
+export function createColumnDefs(columns) {
   const stepColumnsWithIndex = columns
     .map((key, index) => ({ key, index }))
     .filter(({ key }) => STEP_COLUMN_KEY_SET.has(key))
@@ -21,15 +18,18 @@ export function createColumnDefs(columns: string[]): ColumnDef<Record<string, un
     ? columns.filter((key) => !STEP_COLUMN_KEY_SET.has(key))
     : [...columns]
 
-  const makeColumnDef = (colKey: string): ColumnDef<Record<string, unknown>> => ({
+  const makeColumnDef = (colKey) => ({
     id: colKey,
     header: () => colKey,
     accessorFn: (row) => row[colKey],
+    meta: {
+      isEditable: colKey === "comment" || colKey === "needtosend",
+    },
     cell: (info) => {
-      const meta = info.table.options.meta as DataTableMeta | undefined
+      const meta = info.table.options.meta
 
       if (colKey === "comment") {
-        const rowData = info.row.original as { [key: string]: unknown }
+        const rowData = info.row.original
         const rawId = rowData?.id
         if (!meta || rawId === undefined || rawId === null) {
           return formatCellValue(info.getValue())
@@ -46,7 +46,7 @@ export function createColumnDefs(columns: string[]): ColumnDef<Record<string, un
       }
 
       if (colKey === "needtosend") {
-        const rowData = info.row.original as { [key: string]: unknown }
+        const rowData = info.row.original
         const rawId = rowData?.id
         if (!meta || rawId === undefined || rawId === null) {
           return formatCellValue(info.getValue())
@@ -74,12 +74,15 @@ export function createColumnDefs(columns: string[]): ColumnDef<Record<string, un
       ? Math.min(...stepColumnsWithIndex.map(({ index }) => index))
       : defs.length
     const headerLabel = stepColumnsWithIndex[0]?.key ?? "Step Flow"
-    const stepColumnDef: ColumnDef<Record<string, unknown>> = {
+    const stepColumnDef = {
       id: "metro_step_flow",
       header: () => headerLabel,
       accessorFn: (row) => row["main_step"] ?? row["metro_steps"] ?? null,
-      cell: (info) => renderMetroStepFlow(info.row.original as Record<string, unknown>),
+      cell: (info) => renderMetroStepFlow(info.row.original),
       enableSorting: false,
+      meta: {
+        isEditable: false,
+      },
     }
     defs.splice(Math.min(Math.max(insertionIndex, 0), defs.length), 0, stepColumnDef)
   }

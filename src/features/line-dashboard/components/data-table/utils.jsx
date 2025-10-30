@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 
 import { STEP_COLUMN_KEY_SET } from "./constants"
 
-function formatShortDateTime(date: Date) {
+function formatShortDateTime(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0")
   const day = String(date.getDate()).padStart(2, "0")
   const hours = String(date.getHours()).padStart(2, "0")
@@ -12,7 +12,7 @@ function formatShortDateTime(date: Date) {
   return `${month}/${day} ${hours}:${minutes}`
 }
 
-function tryParseDate(value: unknown): Date | null {
+function tryParseDate(value) {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime()) ? null : value
   }
@@ -28,7 +28,7 @@ function tryParseDate(value: unknown): Date | null {
   return null
 }
 
-export function formatCellValue(value: unknown) {
+export function formatCellValue(value) {
   if (value === null || value === undefined) {
     return <span className="text-muted-foreground">NULL</span>
   }
@@ -52,7 +52,7 @@ export function formatCellValue(value: unknown) {
   }
 }
 
-export function searchableValue(value: unknown) {
+export function searchableValue(value) {
   if (value === null || value === undefined) return ""
   const parsedDate = tryParseDate(value)
   if (parsedDate) {
@@ -69,29 +69,29 @@ export function searchableValue(value: unknown) {
   }
 }
 
-export function normalizeStepValue(value: unknown): string | null {
+export function normalizeStepValue(value) {
   if (value === null || value === undefined) return null
   const normalized = String(value).trim()
   return normalized.length > 0 ? normalized : null
 }
 
-export function parseMetroSteps(value: unknown): string[] {
+export function parseMetroSteps(value) {
   if (Array.isArray(value)) {
     return value
       .map((part) => normalizeStepValue(part))
-      .filter((step): step is string => Boolean(step))
+      .filter((step) => Boolean(step))
   }
   if (typeof value === "string") {
     return value
       .split(",")
       .map((part) => normalizeStepValue(part))
-      .filter((step): step is string => Boolean(step))
+      .filter((step) => Boolean(step))
   }
   const single = normalizeStepValue(value)
   return single ? [single] : []
 }
 
-export function renderMetroStepFlow(rowData: Record<string, unknown>) {
+export function renderMetroStepFlow(rowData) {
   const mainStep = normalizeStepValue(rowData.main_step)
   const metroSteps = parseMetroSteps(rowData.metro_steps)
   const statusValue = normalizeStepValue(rowData.status)
@@ -107,13 +107,13 @@ export function renderMetroStepFlow(rowData: Record<string, unknown>) {
 
   const endStep = customEndStep ?? metroEndStep ?? null
 
-  const orderedSteps: string[] = []
+  const orderedSteps = []
   if (mainStep) orderedSteps.push(mainStep)
   if (metroSteps.length > 0) orderedSteps.push(...metroSteps)
   if (informStep) orderedSteps.push(informStep)
   if (endStep && !orderedSteps.includes(endStep)) orderedSteps.push(endStep)
 
-  const seen = new Set<string>()
+  const seen = new Set()
   const steps = orderedSteps.filter((step) => {
     if (seen.has(step)) {
       return false
@@ -151,6 +151,6 @@ export function renderMetroStepFlow(rowData: Record<string, unknown>) {
   )
 }
 
-export function shouldCombineStepColumns(columns: string[]) {
+export function shouldCombineStepColumns(columns) {
   return columns.some((key) => STEP_COLUMN_KEY_SET.has(key) && (key === "main_step" || key === "metro_steps"))
 }

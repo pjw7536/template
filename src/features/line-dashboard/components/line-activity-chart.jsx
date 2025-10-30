@@ -3,13 +3,7 @@
 import * as React from "react"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
-import type { LineTrendPoint } from "../types"
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import {
   Card,
   CardContent,
@@ -24,20 +18,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-type LineActivityChartProps = {
-  lineId: string
-  trend: LineTrendPoint[]
-}
-
 const chartConfig = {
   activeCount: { label: "Active", color: "var(--primary)" },
   completedCount: { label: "Completed", color: "var(--chart-4)" },
-} satisfies ChartConfig
+}
 
-const numberFormatter = new Intl.NumberFormat()
+const numberFormatter = new Intl.NumberFormat("en-US")
 
-export function LineActivityChart({ lineId, trend }: LineActivityChartProps) {
-  const [timeRange, setTimeRange] = React.useState<"90d" | "30d" | "7d">("90d")
+export function LineActivityChart({ lineId, trend }) {
+  const [timeRange, setTimeRange] = React.useState("90d")
 
   const sortedTrend = React.useMemo(
     () => [...trend].sort((a, b) => a.date.localeCompare(b.date)),
@@ -72,7 +61,14 @@ export function LineActivityChart({ lineId, trend }: LineActivityChartProps) {
             Completion and in-progress breakdown
           </p>
         </div>
-        <Select value={timeRange} onValueChange={(value) => setTimeRange(value as typeof timeRange)}>
+        <Select
+          value={timeRange}
+          onValueChange={(value) => {
+            if (value === "90d" || value === "30d" || value === "7d") {
+              setTimeRange(value)
+            }
+          }}
+        >
           <SelectTrigger className="w-40" size="sm" aria-label="Select time range">
             <SelectValue placeholder="Last 90 days" />
           </SelectTrigger>
@@ -111,7 +107,7 @@ export function LineActivityChart({ lineId, trend }: LineActivityChartProps) {
               minTickGap={24}
             />
             <YAxis
-              tickFormatter={(value) => numberFormatter.format(value as number)}
+              tickFormatter={(value) => numberFormatter.format(Number(value))}
               tickLine={false}
               axisLine={false}
               width={48}
@@ -130,7 +126,7 @@ export function LineActivityChart({ lineId, trend }: LineActivityChartProps) {
                         })
                   }}
                   formatter={(value, name) => [
-                    numberFormatter.format(value as number),
+                    numberFormatter.format(Number(value)),
                     name === "completedCount" ? "Completed" : "Active",
                   ]}
                 />

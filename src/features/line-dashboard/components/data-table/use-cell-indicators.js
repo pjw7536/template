@@ -7,25 +7,18 @@ import {
   SAVED_VISIBLE_MS,
   SAVING_DELAY_MS,
 } from "./constants"
-import type { CellIndicator, IndicatorTimers } from "./types"
 
-function clearAllTimers(timers: IndicatorTimers) {
+function clearAllTimers(timers) {
   if (timers.savingDelay) clearTimeout(timers.savingDelay)
   if (timers.transition) clearTimeout(timers.transition)
   if (timers.savedCleanup) clearTimeout(timers.savedCleanup)
 }
 
-type UseCellIndicatorsReturn = {
-  cellIndicators: Record<string, CellIndicator>
-  begin: (keys: string[]) => void
-  finalize: (keys: string[], outcome: "success" | "error") => void
-}
-
-export function useCellIndicators(): UseCellIndicatorsReturn {
-  const [cellIndicators, setCellIndicators] = React.useState<Record<string, CellIndicator>>({})
+export function useCellIndicators() {
+  const [cellIndicators, setCellIndicators] = React.useState({})
   const cellIndicatorsRef = React.useRef(cellIndicators)
-  const indicatorTimersRef = React.useRef<Record<string, IndicatorTimers>>({})
-  const activeIndicatorKeysRef = React.useRef(new Set<string>())
+  const indicatorTimersRef = React.useRef({})
+  const activeIndicatorKeysRef = React.useRef(new Set())
 
   React.useEffect(() => {
     cellIndicatorsRef.current = cellIndicators
@@ -42,15 +35,15 @@ export function useCellIndicators(): UseCellIndicatorsReturn {
     }
   }, [])
 
-  const getTimerEntry = React.useCallback((key: string): IndicatorTimers => {
+  const getTimerEntry = React.useCallback((key) => {
     const existing = indicatorTimersRef.current[key]
     if (existing) return existing
-    const created: IndicatorTimers = {}
+    const created = {}
     indicatorTimersRef.current[key] = created
     return created
   }, [])
 
-  const clearTimer = React.useCallback((key: string, timerName: keyof IndicatorTimers) => {
+  const clearTimer = React.useCallback((key, timerName) => {
     const entry = indicatorTimersRef.current[key]
     if (!entry) return
     const timer = entry[timerName]
@@ -60,28 +53,25 @@ export function useCellIndicators(): UseCellIndicatorsReturn {
     }
   }, [])
 
-  const removeIndicatorImmediate = React.useCallback(
-    (key: string, allowedStatuses?: Array<CellIndicator["status"]>) => {
-      setCellIndicators((prev) => {
-        const current = prev[key]
-        if (!current) return prev
-        if (allowedStatuses && !allowedStatuses.includes(current.status)) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[key]
-        return next
-      })
-    },
-    []
-  )
+  const removeIndicatorImmediate = React.useCallback((key, allowedStatuses) => {
+    setCellIndicators((prev) => {
+      const current = prev[key]
+      if (!current) return prev
+      if (allowedStatuses && !allowedStatuses.includes(current.status)) {
+        return prev
+      }
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }, [])
 
   const begin = React.useCallback(
-    (keys: string[]) => {
+    (keys) => {
       if (keys.length === 0) return
 
       setCellIndicators((prev) => {
-        let next: typeof prev | null = null
+        let next = null
         keys.forEach((key) => {
           if (key in prev) {
             if (next === null) next = { ...prev }
@@ -111,7 +101,7 @@ export function useCellIndicators(): UseCellIndicatorsReturn {
   )
 
   const finalize = React.useCallback(
-    (keys: string[], outcome: "success" | "error") => {
+    (keys, outcome) => {
       if (keys.length === 0) return
       const now = Date.now()
 
@@ -123,7 +113,7 @@ export function useCellIndicators(): UseCellIndicatorsReturn {
         const timers = getTimerEntry(key)
         const indicator = cellIndicatorsRef.current[key]
 
-        const runWithMinimumVisible = (task: () => void) => {
+        const runWithMinimumVisible = (task) => {
           if (indicator && indicator.status === "saving") {
             const elapsed = now - indicator.visibleSince
             const wait = Math.max(0, MIN_SAVING_VISIBLE_MS - elapsed)

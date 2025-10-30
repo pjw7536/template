@@ -2,15 +2,7 @@
 
 import { Checkbox } from "@/components/ui/checkbox"
 
-import type { DataTableMeta } from "../types"
-
-type NeedToSendCellProps = {
-  meta: DataTableMeta
-  recordId: string
-  baseValue: number
-}
-
-export function NeedToSendCell({ meta, recordId, baseValue }: NeedToSendCellProps) {
+export function NeedToSendCell({ meta, recordId, baseValue }) {
   const draftValue = meta.needToSendDrafts[recordId]
   const nextValue = draftValue ?? baseValue
   const isChecked = Number(nextValue) === 1
@@ -25,7 +17,7 @@ export function NeedToSendCell({ meta, recordId, baseValue }: NeedToSendCellProp
         <Checkbox
           checked={isChecked}
           onCheckedChange={async (checked) => {
-            const numericNext = checked ? 1 : 0
+            const numericNext = checked === true ? 1 : 0
             if (numericNext === baseValue) {
               meta.removeNeedToSendDraftValue(recordId)
               meta.clearUpdateError(`${recordId}:needtosend`)
