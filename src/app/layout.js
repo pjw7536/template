@@ -6,6 +6,8 @@ import { DynamicBreadcrumb } from "@/components/navigation/dynamic-breadcrumb"
 import { AppSidebar, AppSidebarProvider } from "@/features/navigation"
 import { getDistinctLineIds } from "@/features/line-dashboard/api/get-line-ids"
 import "./globals.css"
+import { Toaster } from "@/components/ui/sonner"
+
 
 export const metadata = {
   title: "Create Next App",
@@ -41,6 +43,7 @@ export default async function RootLayout({ children }) {
               <main className="flex-1 min-h-0 min-w-0 p-2 pt-0 overflow-hidden">
                 <div className="h-full overflow-hidden">
                   {children}
+                  <Toaster />
                 </div>
               </main>
             </SidebarInset>

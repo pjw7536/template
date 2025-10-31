@@ -1,4 +1,5 @@
-import { IconChevronRight } from "@tabler/icons-react"
+//src/features/line-dashboard/components/data-table/utils.jsx
+import { IconArrowNarrowRight } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 
 import { STEP_COLUMN_KEY_SET } from "./constants"
@@ -185,85 +186,93 @@ function uniquePreserveOrder(arr) {
   }
   return out
 }
-
-/* ============================================
- * 스텝 플로우 렌더링
- * ============================================ */
-
-/**
- * 스텝 배지의 스타일 클래스를 결정 (강조/끝/기본)
- * - 강조(highlight)가 끝(end)보다 우선
+/** 스텝 배지의 스타일 클래스를 결정
+ * - main_step: 사각형 (rounded-none)
+ * - current(현재 스텝): 연한 파란색 배경
+ * - 그 외: 기본 스타일
  */
-function getStepPillClasses({ isHighlight, isEnd }) {
+function getStepPillClasses({ isMain, isCurrent }) {
   return cn(
-    "rounded-full border px-2 py-0.5 text-xs font-medium leading-none",
-    isHighlight
-      ? "border-primary bg-blue-600 text-primary-foreground"
-      : isEnd
-        ? "border-border bg-slate-800 text-muted-foreground"
-        : "border-border bg-white text-foreground"
+    "border px-2 py-0.5 text-xs font-medium leading-none",
+    // 모서리: main이면 사각형, 아니면 pill
+    isMain ? "rounded-sm" : "rounded-full",
+    // 색상: 현재 스텝이면 연파랑, 아니면 기본
+    isCurrent
+      ? "bg-blue-400 border-blue-600 text-blue-900"
+      : "bg-white border-border text-foreground"
   )
 }
 
-/**
- * 스텝 플로우 렌더러
- * - main_step, metro_steps, inform_step, endStep(=custom_end_step 우선) 를
- *   순서에 맞게 합치고, 중복 제거하여 칩 형태로 렌더링
- * - highlightStep은 상태/메인/현재스텝 규칙에 따라 결정
+/** 스텝 플로우 렌더러 (규칙 반영본)
+ * - main → metro_steps[] → inform 순서로 표시
+ * - 현재 스텝(metro_current_step)은 연한 파란색 배경
+ * - main_step은 모서리 없음(사각형)
+ * - custom_end_step가 있으면 해당 스텝 아래에 'End' 라벨 표시
  */
 export function renderMetroStepFlow(rowData) {
-  // 1) 원천 값 정규화
   const mainStep = normalizeStepValue(rowData.main_step)
   const metroSteps = parseMetroSteps(rowData.metro_steps)
-  const statusValue = normalizeStepValue(rowData.status)
-  const metroCurrentStep = normalizeStepValue(rowData.metro_current_step)
-  const metroEndStep = normalizeStepValue(rowData.metro_end_step)
-  const customEndStep = normalizeStepValue(rowData.custom_end_step)
   const informStep = normalizeStepValue(rowData.inform_step)
+  const currentStep = normalizeStepValue(rowData.metro_current_step)
+  const customEndStep = normalizeStepValue(rowData.custom_end_step)
+  const metroEndStep = normalizeStepValue(rowData.metro_end_step)
 
-  // 2) 강조/종료 스텝 결정
-  //  - MAIN_COMPLETE 상태라면 mainStep을 우선 강조(없으면 metroCurrent)
-  //  - 그 외에는 metroCurrent를 우선 강조(없으면 mainStep)
-  const highlightStep =
-    statusValue === "MAIN_COMPLETE"
-      ? (mainStep ?? metroCurrentStep ?? null)
-      : (metroCurrentStep ?? mainStep ?? null)
+  // END 위치 결정 우선순위: custom_end_step > metro_end_step
+  const endStep = customEndStep || metroEndStep
 
-  const endStep = customEndStep ?? metroEndStep ?? null
-
-  // 3) 표시 순서: main → metroSteps[] → inform → end(없으면 생략)
   const orderedSteps = uniquePreserveOrder([
     ...(mainStep ? [mainStep] : []),
     ...metroSteps,
     ...(informStep ? [informStep] : []),
-    ...(endStep ? [endStep] : []),
   ])
 
-  if (orderedSteps.length === 0) {
-    return PLACEHOLDER.noSteps
+  if (orderedSteps.length === 0) return PLACEHOLDER.noSteps
+
+  const labelClasses = {
+    MAIN: "text-[10px] leading-none text-muted-foreground",
+    CustomEND: "text-[10px] leading-none font-semibold text-blue-500",
+    END: "text-[10px] leading-none text-muted-foreground"
   }
 
-  // 4) 렌더
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-upper gap-1">
       {orderedSteps.map((step, index) => {
-        const isHighlight = highlightStep ? step === highlightStep : false
-        const isEnd = endStep ? step === endStep : false
+        const isMain = mainStep ? step === mainStep : false
+        const isCurrent = currentStep ? step === currentStep : false
+
+        /** @type {string[]} */
+        const belowLabels = []
+        if (mainStep && step === mainStep) belowLabels.push("MAIN")
+        if (informStep && step === informStep) belowLabels.push("END")
+        if (endStep && step === endStep) belowLabels.push("CustomEND")
 
         return (
-          <div key={`${step}-${index}`} className="flex items-center gap-1">
+          <div key={`${step}-${index}`} className="flex items-start gap-1">
             {index > 0 && (
-              <IconChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              <IconArrowNarrowRight className="size-4 shrink-0 text-muted-foreground mt-0.5" />
             )}
-            <span className={getStepPillClasses({ isHighlight, isEnd })}>
-              {step}
-            </span>
+
+            {/* 세로 스택: 스텝 배지 + 라벨 */}
+            <div className="flex flex-col items-center gap-0.5">
+              <span className={getStepPillClasses({ isMain, isCurrent })}>
+                {step}
+              </span>
+
+              {belowLabels.map((label, i) => (
+                <span
+                  key={`${step}-label-${i}`}
+                  className={labelClasses[label] || "text-[10px] leading-none text-muted-foreground"}
+                >{label}</span>
+              ))}
+            </div>
           </div>
         )
       })}
     </div>
   )
 }
+
+
 
 /* ============================================
  * 컬럼 결합 여부

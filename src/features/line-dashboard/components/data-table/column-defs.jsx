@@ -16,8 +16,8 @@ import { NeedToSendCell } from "./cells/need-to-send-cell"
 import { formatCellValue, renderMetroStepFlow } from "./utils"
 
 /* =================================================================================
- * 구성 가능한 옵션 레이어
- * - 컬럼 순서/정렬 허용/정렬 방식/표시이름/기본 너비 등을 userConfig로 제어
+ * 구성 가능한 옵션 레이어 (UserConfig)
+ * - 컬럼 순서/레이블/정렬 허용/정렬 타입/기본 너비/정렬 방향을 한 번에 커스터마이즈
  * - 필요 옵션만 넘기면 나머지는 기본값 사용
  * ================================================================================= */
 
@@ -27,44 +27,101 @@ import { formatCellValue, renderMetroStepFlow } from "./utils"
  * @property {Record<string, string>} [labels] // 컬럼 표시이름 매핑 (key -> label)
  * @property {Record<string, boolean>} [sortable] // 각 컬럼 정렬 허용 여부 (true/false)
  * @property {Record<string, "auto"|"text"|"number"|"datetime">} [sortTypes] // 정렬 방식 지정
- * @property {Record<string, number>} [width]  // (선택) 각 컬럼 기본 너비 힌트
+ * @property {Record<string, number>} [width]  // 각 컬럼 "기본" 너비(px) 힌트
  * @property {string} [processFlowHeader]      // 병합 스텝컬럼 라벨 (기본: "process_flow")
  * @property {Record<string, "left"|"center"|"right">} [cellAlign]   // 셀 정렬 방향
- * @property {Record<string, "left"|"center"|"right">} [headerAlign] // 헤더 정렬 방향 (지정 없으면 셀과 동일하게 적용)
+ * @property {Record<string, "left"|"center"|"right">} [headerAlign] // 헤더 정렬 방향 (없으면 셀과 동일)
  */
+
+/* ----------------------- 기본 사이즈 정책 -----------------------
+ * - size: 초기/기본 폭
+ * - minSize/maxSize: 사용자 리사이즈 시 허용 범위
+ *   (TanStack Table v8은 size 힌트를 바인딩하면 리사이저/colgroup과 함께 안정적으로 반영됨)
+ */
+const DEFAULT_MIN_WIDTH = 72
+const DEFAULT_MAX_WIDTH = 480
+const DEFAULT_TEXT_WIDTH = 140
+const DEFAULT_NUMBER_WIDTH = 110
+const DEFAULT_ID_WIDTH = 130
+const DEFAULT_DATE_WIDTH = 100
+const DEFAULT_BOOL_ICON_WIDTH = 60
+const DEFAULT_PROCESS_FLOW_WIDTH = 360
 
 /** 기본 설정 */
 const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
-  order: ["created_at", "line_id", "sdwt_prod", "EQP_CB", "proc_id", "ppid", "sample_type", "sample_group", "lot_id", "status", "comment", "process_flow", "needtosend", "send_jira", "informed_at", "user_sdwt_prod"],          // 제공 시 해당 순서를 우선
+  // 제공 시 해당 순서를 우선(명시되지 않은 키는 뒤에 자동 배치)
+  order: [
+    "created_at",
+    "line_id",
+    "sdwt_prod",
+    "EQP_CB",
+    "proc_id",
+    "ppid",
+    "sample_type",
+    "sample_group",
+    "lot_id",
+    "status",
+    "comment",
+    "process_flow",
+    "needtosend",
+    "send_jira",
+    "informed_at",
+    "user_sdwt_prod",
+  ],
+
+  // 표시 이름 기본 매핑 (원하면 userConfig.labels로 덮어쓰기)
   labels: {
-    // 여기서 자주 쓰는 표시이름을 기본 세팅(원하면 userConfig로 덮어쓰기)
     defect_url: "Defect",
     comment: "Comment",
     needtosend: "예약",
     send_jira: "JIRA",
     status: "Status",
-    knoxid: "KnoxID"
+    knoxid: "KnoxID",
+    process_flow: "Process Flow",
   },
+
+  // 기본 정렬 허용/비허용
   sortable: {
-    // 기본 정렬 허용/비허용
     defect_url: false,
     comment: true,
     needtosend: true,
-    send_jira: false,   // 아이콘 기반이므로 기본 비허용
+    send_jira: true,
     status: true,
   },
+
+  // 기본 정렬 타입: 지정 없으면 "auto"
   sortTypes: {
-    // 기본 정렬 타입: 지정 없으면 "auto"
     comment: "text",
     needtosend: "number",
     send_jira: "number",
     status: "text",
-
+    // 기타 컬럼은 auto 추론
   },
+
+  // ⛳ 기본 폭 힌트 (없으면 타입/키명 기반으로 안전한 기본값 추론)
   width: {
-    needtosend: 200,
-  },                 // 필요 시 너비 힌트
-  processFlowHeader: "Process_flow",
+    // 아이콘/불린류
+    needtosend: DEFAULT_BOOL_ICON_WIDTH,
+    send_jira: DEFAULT_BOOL_ICON_WIDTH,
+    status: 150,
+
+    // 식별자/ID류
+    line_id: 90,
+    lot_id: 90,
+    sample_type: 150,
+
+    // 긴 텍스트
+    comment: 350,
+
+    // 스텝 플로우(병합 컬럼)
+    process_flow: 600,
+    user_sdwt_prod: 150,
+  },
+
+  // 병합 스텝 라벨
+  processFlowHeader: "process_flow",
+
+  // 정렬 방향
   cellAlign: {
     line_id: "center",
     EQP_CB: "center",
@@ -75,8 +132,21 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     needtosend: "center",
     sdwt_prod: "center",
     sample_type: "center",
+    sample_group: "center",
+    knoxid: "center",
+    user_sdwt_prod: "center",
+    ppid: "center",
   },
-  headerAlign: {},
+  headerAlign: {
+    needtosend: "center",
+    send_jira: "center",
+    status: "center",
+    knoxid: "center",
+    user_sdwt_prod: "center",
+    sample_type: "center",
+    sample_group: "center",
+    ppid: "center",
+  },
 })
 
 /** config 병합 유틸 */
@@ -145,9 +215,7 @@ function normalizeStatus(raw) {
 }
 
 /* =================================================================================
- * 정렬 유틸
- * - TanStack Table v8 기준: columnDef.sortingFn 에 comparator 함수 전달 가능
- * - 여기서는 간단한 타입별 comparator 제공 + "auto" 추론
+ * 정렬 유틸 (TanStack v8의 sortingFn에 comparator 제공)
  * ================================================================================= */
 
 function isNumeric(value) {
@@ -225,15 +293,49 @@ function resolveAlignment(colKey, config, sampleValue) {
 
 /** 정렬 comparator를 반환 */
 function getSortingFnForKey(colKey, config, sampleValue) {
-  const t =
-    (config.sortTypes && config.sortTypes[colKey]) || "auto"
-
+  const t = (config.sortTypes && config.sortTypes[colKey]) || "auto"
   const sortType = t === "auto" ? autoSortType(sampleValue) : t
 
   if (sortType === "number") return (rowA, rowB) => cmpNumber(rowA.getValue(colKey), rowB.getValue(colKey))
   if (sortType === "datetime") return (rowA, rowB) => cmpDate(rowA.getValue(colKey), rowB.getValue(colKey))
   // 기본 text
   return (rowA, rowB) => cmpText(rowA.getValue(colKey), rowB.getValue(colKey))
+}
+
+/* =================================================================================
+ * 컬럼 width 유틸: 타입/키 기반 기본 폭 자동 추론 + 범위 클램프
+ * ================================================================================= */
+
+/** 숫자/날짜/ID/불린/텍스트에 따라 안전한 기본 폭을 제시 */
+function inferDefaultWidth(colKey, sampleValue) {
+  if (colKey === "process_flow") return DEFAULT_PROCESS_FLOW_WIDTH
+  if (colKey === "needtosend" || colKey === "send_jira") return DEFAULT_BOOL_ICON_WIDTH
+  if (/(_?id)$/i.test(colKey)) return DEFAULT_ID_WIDTH
+
+  if (tryDate(sampleValue)) return DEFAULT_DATE_WIDTH
+  if (isNumeric(sampleValue)) return DEFAULT_NUMBER_WIDTH
+
+  // 기본 텍스트
+  return DEFAULT_TEXT_WIDTH
+}
+
+/** 안전한 px 숫자만 허용 */
+function toSafeNumber(n, fallback) {
+  const v = Number(n)
+  return Number.isFinite(v) && v > 0 ? v : fallback
+}
+
+/** 최종 size/min/max 산출 */
+function resolveColumnSizes(colKey, config, sampleValue) {
+  const base = config.width?.[colKey]
+  const inferred = inferDefaultWidth(colKey, sampleValue)
+  const size = toSafeNumber(base, inferred)
+
+  // min/max는 공통 기본 범위를 주되, size가 너무 작거나 큰 경우 보정
+  const minSize = Math.min(Math.max(DEFAULT_MIN_WIDTH, Math.floor(size * 0.5)), size)
+  const maxSize = Math.max(DEFAULT_MAX_WIDTH, Math.ceil(size * 2))
+
+  return { size, minSize, maxSize }
 }
 
 /* =================================================================================
@@ -369,6 +471,8 @@ function getSampleValueForColumns(row, columns) {
 function makeStepFlowColumn(stepCols, label, config, firstRow) {
   const sample = getSampleValueForColumns(firstRow, stepCols)
   const alignment = resolveAlignment("process_flow", config, sample)
+  const { size, minSize, maxSize } = resolveColumnSizes("process_flow", config, sample)
+
   return {
     id: "process_flow",
     header: () => label,
@@ -376,6 +480,9 @@ function makeStepFlowColumn(stepCols, label, config, firstRow) {
     cell: (info) => renderMetroStepFlow(info.row.original),
     enableSorting: false,
     meta: { isEditable: false, alignment },
+    size,
+    minSize,
+    maxSize,
   }
 }
 
@@ -397,9 +504,10 @@ function makeColumnDef(colKey, config, sampleValueFromFirstRow) {
     ? getSortingFnForKey(colKey, config, sampleValueFromFirstRow)
     : undefined
 
-  // 너비 힌트(optional)
-  const size = config.width?.[colKey]
+  // 🔧 사이즈(기본/최소/최대) 계산
+  const { size, minSize, maxSize } = resolveColumnSizes(colKey, config, sampleValueFromFirstRow)
 
+  // 정렬(헤더/셀) 방향
   const alignment = resolveAlignment(colKey, config, sampleValueFromFirstRow)
 
   return {
@@ -413,7 +521,10 @@ function makeColumnDef(colKey, config, sampleValueFromFirstRow) {
     cell: (info) => renderCellByKey(colKey, info),
     enableSorting,
     sortingFn,
-    size, // TanStack Table v8에서 크기 힌트로 활용 가능
+    // ⛳ TanStack Table v8 사이징 힌트
+    size,
+    minSize,
+    maxSize,
   }
 }
 
@@ -422,7 +533,7 @@ function makeColumnDef(colKey, config, sampleValueFromFirstRow) {
  * - createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess?)
  *   - rawColumns: 원본 컬럼 키 배열
  *   - userConfig: 위 UserConfig
- *   - firstRowForTypeGuess: 첫 행 데이터(정렬 타입 auto 추론 정확도 향상용 · 선택)
+ *   - firstRowForTypeGuess: 첫 행 데이터(정렬 타입/폭 추론 정확도 향상용 · 선택)
  * ================================================================================= */
 
 export function createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess) {
@@ -444,9 +555,9 @@ export function createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess) {
     return makeColumnDef(key, config, sample)
   })
 
-  // 4) 병합 컬럼 삽입 (이름은 config.processFlowHeader 또는 labels.process_flow 사용 가능)
+  // 4) 병합 컬럼 삽입 (라벨은 labels.process_flow > processFlowHeader 순으로 사용)
   if (combineSteps) {
-    const headerText = config.labels?.process_flow || config.processFlowHeader
+    const headerText = config.labels?.process_flow || config.processFlowHeader || "process_flow"
     const stepFlowCol = makeStepFlowColumn(stepCols, headerText, config, firstRowForTypeGuess)
     // 기본 삽입 위치: 원래 스텝 컬럼들 중 가장 앞 인덱스
     const insertionIndex = stepCols.length ? Math.min(...stepCols.map(({ index }) => index)) : defs.length
@@ -473,7 +584,6 @@ export function createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess) {
   return defs
 }
 
-
 /* =================================================================================
  * 사용 예시 (참고)
  * ---------------------------------------------------------------------------------
@@ -494,11 +604,11 @@ export function createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess) {
  *     lot_id: "text",
  *     needtosend: "number",
  *     status: "text",
- *     // 명시 없으면 auto
  *   },
  *   width: {
  *     status: 180,
  *     process_flow: 320,
+ *     comment: 260,
  *   },
  *   cellAlign: {
  *     defect_url: "center",
