@@ -255,7 +255,12 @@ function computeMetroProgress(rowOriginal, normalizedStatus) {
 
   // ② main + metro 결합
   const orderedSteps = []
-  if (mainStep) orderedSteps.push(mainStep)
+  if (mainStep) {
+    // 중복 방지: metroSteps에 이미 있으면 추가하지 않음
+    if (!metroSteps.includes(mainStep)) {
+      orderedSteps.push(mainStep)
+    }
+  }
   orderedSteps.push(...effectiveMetroSteps)
 
   const total = orderedSteps.length
