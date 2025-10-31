@@ -2,18 +2,12 @@
 "use client"
 
 import Link from "next/link"
-import {
-  ExternalLink,
-  Check,
-  Circle,
-  CircleDot,
-  CircleCheck,
-} from "lucide-react"
+import { ExternalLink, Check } from "lucide-react"
 
 import { STEP_COLUMN_KEY_SET } from "./constants"
 import { CommentCell } from "./cells/comment-cell"
 import { NeedToSendCell } from "./cells/need-to-send-cell"
-import { formatCellValue, renderMetroStepFlow } from "./utils"
+import { formatCellValue, renderMetroStepFlow, parseMetroSteps, normalizeStepValue } from "./utils"
 
 /* =================================================================================
  * 구성 가능한 옵션 레이어 (UserConfig)
@@ -210,9 +204,78 @@ function normalizeBinaryFlag(raw) {
 function normalizeStatus(raw) {
   if (raw == null) return null
   const s = String(raw).trim().toUpperCase().replace(/\s+/g, "_")
-  if (s === "MAIN_COMPLTE") return "MAIN_COMPLETE" // 오타 보정
   return s
 }
+
+function computeMetroProgress(rowOriginal, normalizedStatus) {
+  const mainStep = normalizeStepValue(rowOriginal?.main_step)
+  const metroSteps = parseMetroSteps(rowOriginal?.metro_steps)
+  const customEndStep = normalizeStepValue(rowOriginal?.custom_end_step)
+  const currentStep = normalizeStepValue(rowOriginal?.metro_current_step)
+
+  // ----------------------------------------
+  // ① 유효한 metro step 목록 계산
+  // custom_end_step이 있으면 그 이전까지만 유효 단계로 계산
+  // ----------------------------------------
+  const effectiveMetroSteps = (() => {
+    if (!metroSteps.length) return []
+    if (!customEndStep) return metroSteps
+    const endIndex = metroSteps.findIndex((step) => step === customEndStep)
+    return endIndex >= 0 ? metroSteps.slice(0, endIndex + 1) : metroSteps
+  })()
+
+  // ----------------------------------------
+  // ② mainStep + metroSteps 결합
+  // ----------------------------------------
+  const orderedSteps = []
+  if (mainStep) orderedSteps.push(mainStep)
+  orderedSteps.push(...effectiveMetroSteps)
+
+  const total = orderedSteps.length
+  if (total === 0) return { completed: 0, total: 0 }
+
+  // ----------------------------------------
+  // ③ 현재 단계 위치 계산
+  // ----------------------------------------
+  let completed = 0
+
+  // currentStep이 없는 경우 → 진행 0%
+  if (!currentStep) {
+    completed = 0
+  } else {
+    const currentIndex = orderedSteps.findIndex((step) => step === currentStep)
+
+    // custom_end_step보다 뒤 단계까지 갔을 경우 → 강제 100%
+    if (customEndStep) {
+      const endIndex = orderedSteps.findIndex((step) => step === customEndStep)
+      const currentIndexInFull = metroSteps.findIndex((step) => step === currentStep)
+      const endIndexInFull = metroSteps.findIndex((step) => step === customEndStep)
+
+      if (currentIndexInFull >= 0 && endIndexInFull >= 0 && currentIndexInFull > endIndexInFull) {
+        completed = total
+      } else if (currentIndex >= 0) {
+        completed = currentIndex + 1
+      }
+    }
+    // custom_end_step이 없으면 기존 로직 유지
+    else if (currentIndex >= 0) {
+      completed = currentIndex + 1
+    }
+  }
+
+  // ----------------------------------------
+  // ④ 상태가 COMPLETE인 경우 → 전체 완료
+  // ----------------------------------------
+  if (normalizedStatus === "COMPLETE") {
+    completed = total
+  }
+
+  return {
+    completed: Math.max(0, Math.min(completed, total)),
+    total,
+  }
+}
+
 
 /* =================================================================================
  * 정렬 유틸 (TanStack v8의 sortingFn에 comparator 제공)
@@ -415,22 +478,46 @@ const CellRenderers = {
   },
 
   /** 🧭 status: 상태별 아이콘/색상 */
-  status: ({ value }) => {
+  status: ({ value, rowOriginal }) => {
     const st = normalizeStatus(value)
-    const map = {
-      ESOP_STARTED: { icon: Check, className: "text-blue-600", label: "ESOP Started" },
-      MAIN_COMPLETE: { icon: Circle, className: "text-amber-500", label: "Main Complete" },
-      PARTIAL_COMPLETE: { icon: CircleDot, className: "text-teal-600", label: "Partial Complete" },
-      COMPLETE: { icon: CircleCheck, className: "text-emerald-600", label: "Complete" },
+    const labels = {
+      ESOP_STARTED: "ESOP Started",
+      MAIN_COMPLETE: "Main Complete",
+      PARTIAL_COMPLETE: "Partial Complete",
+      COMPLETE: "Complete",
     }
-    const fallback = { icon: Circle, className: "text-muted-foreground", label: st || "Unknown" }
-    const { icon: IconCmp, className, label } = map[st] ?? fallback
+    const label = labels[st] ?? st ?? "Unknown"
+
+    const { completed, total } = computeMetroProgress(rowOriginal, st)
+    const percent = total > 0 ? Math.min(100, Math.max(0, (completed / total) * 100)) : 0
 
     return (
-      <span className="inline-flex items-center gap-2" title={label} aria-label={label} role="img">
-        <IconCmp className={`h-5 w-5 ${className}`} />
-        <span className="text-sm text-foreground/80">{label}</span>
-      </span>
+      <div className="flex w-full flex-col gap-1">
+        <div
+          className="h-2 w-full overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-valuenow={Number.isFinite(percent) ? Math.round(percent) : 0}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuetext={`${completed} of ${total} steps`}
+        >
+          <div
+            className="h-full rounded-full bg-blue-500 transition-all"
+            style={{ width: `${percent}%` }}
+            role="presentation"
+          />
+        </div>
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+          <span className="truncate" title={label}>
+            {label}
+          </span>
+          <span>
+            {completed}
+            <span aria-hidden="true">/</span>
+            {total}
+          </span>
+        </div>
+      </div>
     )
   },
 }
