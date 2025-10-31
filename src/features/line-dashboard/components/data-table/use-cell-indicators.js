@@ -21,15 +21,18 @@ export function useCellIndicators() {
   }, [cellIndicators])
 
   React.useEffect(() => {
+    const timersRef = indicatorTimersRef
+    const activeIndicatorKeys = activeIndicatorKeysRef.current
+
     return () => {
-      Object.keys(indicatorTimersRef.current).forEach((key) => {
+      Object.keys(timersRef.current).forEach((key) => {
         TIMER_NAMES.forEach((timerName) => {
-          const timerId = indicatorTimersRef.current[key]?.[timerName]
+          const timerId = timersRef.current[key]?.[timerName]
           if (timerId) clearTimeout(timerId)
         })
       })
-      indicatorTimersRef.current = {}
-      activeIndicatorKeysRef.current.clear()
+      timersRef.current = {}
+      activeIndicatorKeys.clear()
     }
   }, [])
 

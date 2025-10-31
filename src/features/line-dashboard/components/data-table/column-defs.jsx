@@ -35,7 +35,7 @@ import { formatCellValue, renderMetroStepFlow } from "./utils"
 
 /** 기본 설정 */
 const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
-  order: ["line_id", "EQP_CB", "status", "process_flow", "lot_id", "defect_url", "comment", "needtosend"],          // 제공 시 해당 순서를 우선
+  order: ["created_at", "line_id", "sdwt_prod", "EQP_CB", "proc_id", "ppid", "sample_type", "sample_group", "lot_id", "status", "comment", "process_flow", "needtosend", "send_jira", "informed_at", "user_sdwt_prod"],          // 제공 시 해당 순서를 우선
   labels: {
     // 여기서 자주 쓰는 표시이름을 기본 세팅(원하면 userConfig로 덮어쓰기)
     defect_url: "Defect",
@@ -61,7 +61,9 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     status: "text",
 
   },
-  width: {},                 // 필요 시 너비 힌트
+  width: {
+    needtosend: 200,
+  },                 // 필요 시 너비 힌트
   processFlowHeader: "Process_flow",
   cellAlign: {
     line_id: "center",

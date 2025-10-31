@@ -52,6 +52,100 @@ const JUSTIFY_ALIGN_CLASS = {
   right: "justify-end",
 }
 
+const QUICK_FILTER_DEFINITIONS = [
+  {
+    key: "sdwt_prod",
+    label: "설비 SDWT",
+    resolveColumn: (columns) => findMatchingColumn(columns, "sdwt_prod"),
+    normalizeValue: (value) => {
+      if (value == null) return null
+      const trimmed = String(value).trim()
+      return trimmed.length > 0 ? trimmed : null
+    },
+    formatValue: (value) => value,
+    compareOptions: (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
+  },
+  {
+    key: "user_sdwt_prod",
+    label: "User (SDWT)",
+    resolveColumn: (columns) => findMatchingColumn(columns, "user_sdwt_prod"),
+    normalizeValue: (value) => {
+      if (value == null) return null
+      const trimmed = String(value).trim()
+      return trimmed.length > 0 ? trimmed : null
+    },
+    formatValue: (value) => value,
+    compareOptions: (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
+  },
+  {
+    key: "status",
+    label: "Status",
+    resolveColumn: (columns) => findMatchingColumn(columns, "status"),
+    normalizeValue: (value) => {
+      if (value == null) return null
+      const normalized = String(value).trim()
+      return normalized.length > 0 ? normalized.toUpperCase() : null
+    },
+    formatValue: (value) => value,
+    compareOptions: (a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
+  },
+  {
+    key: "needtosend",
+    label: "예약", // matches the column display label
+    resolveColumn: (columns) => findMatchingColumn(columns, "needtosend"),
+    normalizeValue: (value) => {
+      if (value === 1 || value === "1") return "1"
+      if (value === 0 || value === "0") return "0"
+      if (value == null || value === "") return "0"
+      const numeric = Number(value)
+      if (Number.isFinite(numeric)) return numeric === 1 ? "1" : "0"
+      return "0"
+    },
+    formatValue: (value) => (value === "1" ? "Yes" : "No"),
+    compareOptions: (a, b) => {
+      if (a.value === b.value) return 0
+      if (a.value === "1") return -1
+      if (b.value === "1") return 1
+      return a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+    },
+  },
+  {
+    key: "send_jira",
+    label: "Jira전송완료", // matches the column display label
+    resolveColumn: (columns) => findMatchingColumn(columns, "send_jira"),
+    normalizeValue: (value) => {
+      if (value === 1 || value === "1") return "1"
+      if (value === 0 || value === "0") return "0"
+      if (value == null || value === "") return "0"
+      const numeric = Number(value)
+      if (Number.isFinite(numeric)) return numeric === 1 ? "1" : "0"
+      return "0"
+    },
+    formatValue: (value) => (value === "1" ? "Yes" : "No"),
+    compareOptions: (a, b) => {
+      if (a.value === b.value) return 0
+      if (a.value === "1") return -1
+      if (b.value === "1") return 1
+      return a.label.localeCompare(b.label, undefined, { sensitivity: "base" })
+    },
+  },
+]
+
+function createInitialQuickFilters() {
+  return QUICK_FILTER_DEFINITIONS.reduce((acc, definition) => {
+    acc[definition.key] = null
+    return acc
+  }, {})
+}
+
+function findMatchingColumn(columns, target) {
+  if (!Array.isArray(columns)) return null
+  const targetLower = target.toLowerCase()
+  return (
+    columns.find((column) => typeof column === "string" && column.toLowerCase() === targetLower) ?? null
+  )
+}
+
 function getTextAlignClass(alignment = "left") {
   return TEXT_ALIGN_CLASS[alignment] ?? TEXT_ALIGN_CLASS.left
 }
@@ -101,11 +195,85 @@ export function DataTable({ lineId }) {
   )
   const globalFilterFn = React.useMemo(() => createGlobalFilterFn(columns), [columns])
   const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize: 10 })
+  const [quickFilters, setQuickFilters] = React.useState(() => createInitialQuickFilters())
 
-  // eslint-disable-next-line react-hooks/incompatible-library
+  const quickFilterSections = React.useMemo(() => {
+    return QUICK_FILTER_DEFINITIONS.map((definition) => {
+      const columnKey = definition.resolveColumn(columns)
+      if (!columnKey) return null
+
+      const valueMap = new Map()
+      rows.forEach((row) => {
+        const rawValue = row?.[columnKey]
+        const normalized = definition.normalizeValue(rawValue)
+        if (normalized === null) return
+        if (!valueMap.has(normalized)) {
+          valueMap.set(normalized, definition.formatValue(normalized, rawValue))
+        }
+      })
+
+      if (valueMap.size === 0) return null
+
+      const options = Array.from(valueMap.entries()).map(([value, label]) => ({
+        value,
+        label,
+      }))
+
+      if (typeof definition.compareOptions === "function") {
+        options.sort((a, b) => definition.compareOptions(a, b))
+      }
+
+      return {
+        key: definition.key,
+        label: definition.label,
+        options,
+        getValue: (row) => definition.normalizeValue(row?.[columnKey]),
+      }
+    }).filter(Boolean)
+  }, [columns, rows])
+
+  React.useEffect(() => {
+    const sectionMap = new Map(quickFilterSections.map((section) => [section.key, section]))
+    setQuickFilters((previous) => {
+      let next = previous
+      for (const definition of QUICK_FILTER_DEFINITIONS) {
+        const section = sectionMap.get(definition.key)
+        const currentValue = previous[definition.key] ?? null
+        if (!section) {
+          if (currentValue !== null) {
+            if (next === previous) next = { ...previous }
+            next[definition.key] = null
+          }
+          continue
+        }
+
+        if (
+          currentValue !== null &&
+          !section.options.some((option) => option.value === currentValue)
+        ) {
+          if (next === previous) next = { ...previous }
+          next[definition.key] = null
+        }
+      }
+      return next
+    })
+  }, [quickFilterSections])
+
+  const filteredRows = React.useMemo(() => {
+    if (quickFilterSections.length === 0) return rows
+
+    const activeSections = quickFilterSections.filter((section) => quickFilters[section.key] !== null)
+    if (activeSections.length === 0) return rows
+
+    return rows.filter((row) =>
+      activeSections.every((section) => section.getValue(row) === quickFilters[section.key])
+    )
+  }, [rows, quickFilterSections, quickFilters])
+
+  /* eslint-disable react-hooks/incompatible-library */
   // 한 곳에서 모든 tanstack-table 설정을 모아둔다.
   const table = useReactTable({
-    data: rows,
+    data: filteredRows,
     columns: columnDefs,
     meta: tableMeta,
     state: {
@@ -123,6 +291,7 @@ export function DataTable({ lineId }) {
     getPaginationRowModel: getPaginationRowModel(),
     columnResizeMode: "onChange",
   })
+  /* eslint-enable react-hooks/incompatible-library */
 
   /* ===========================
    * 파생 정보 계산
@@ -143,6 +312,7 @@ export function DataTable({ lineId }) {
 
   const emptyStateColSpan = Math.max(table.getVisibleLeafColumns().length, 1)
   const totalLoaded = rows.length
+  const filteredTotal = filteredRows.length
   const hasNoRows = !isLoadingRows && rowsError === null && columns.length === 0
   const [lastUpdatedLabel, setLastUpdatedLabel] = React.useState(null)
   const currentPage = pagination.pageIndex + 1
@@ -168,7 +338,7 @@ export function DataTable({ lineId }) {
           pageIndex: 0,
         }
     )
-  }, [filter, sorting])
+  }, [filter, sorting, quickFilters])
 
   // 페이지 수가 줄어들면 현재 페이지를 안전한 범위로 조정
   React.useEffect(() => {
@@ -181,7 +351,27 @@ export function DataTable({ lineId }) {
         }
         : prev
     )
-  }, [table, rows.length, pagination.pageSize])
+  }, [table, rows.length, filteredRows.length, pagination.pageSize])
+
+  const activeQuickFilterCount = React.useMemo(
+    () => Object.values(quickFilters).filter((value) => value !== null).length,
+    [quickFilters]
+  )
+
+  const handleQuickFilterToggle = React.useCallback((key, value) => {
+    setQuickFilters((previous) => {
+      const current = previous[key]
+      if (current === value) {
+        if (current === null) return previous
+        return { ...previous, [key]: null }
+      }
+      return { ...previous, [key]: value }
+    })
+  }, [])
+
+  const handleQuickFilterClearAll = React.useCallback(() => {
+    setQuickFilters(() => createInitialQuickFilters())
+  }, [])
 
   /* ===========================
    * 이벤트 핸들러
@@ -265,56 +455,88 @@ export function DataTable({ lineId }) {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-lg font-semibold">
             <IconDatabase className="size-5" />
-            데이터 테이블 · {lineId}
+            {lineId}Line E-SOP Status
           </div>
-          <p className="text-sm text-muted-foreground">
-            Loaded {numberFormatter.format(totalLoaded)} rows from {selectedTable} ({rangeLabel}).
-          </p>
         </div>
       </div>
+      {quickFilterSections.length > 0 ? (
+        <div className="flex flex-col gap-3 border p-2 rounded-lg">
+          {/* 상단 타이틀 + 초기화 버튼 */}
+          <div className="flex items-center gap-6">
+            <span className="text-xs font-semibold tracking-wide text-muted-foreground">
+              Quick Filters
+            </span>
+            {activeQuickFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={handleQuickFilterClearAll}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <Input
-          placeholder="Filter rows…"
-          value={filter}
-          onChange={(event) => table.setGlobalFilter(event.target.value)}
-          className="sm:w-50"
-          aria-label="Filter table rows"
-        />
+          {/* ⬇️ 섹션 그룹들을 가로로 이어붙임 */}
+          <div className="flex flex-wrap items-start gap-3">
+            {quickFilterSections.map((section) => {
+              const current = quickFilters[section.key]
+              const allSelected = current === null
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <Input
-            type="date"
-            max={toDate ?? todayInputValue}
-            value={fromDate ?? ""}
-            onChange={(event) => setFromDate(event.target.value || null)}
-            className="w-full sm:w-40"
-            aria-label="From date"
-          />
+              return (
+                <fieldset
+                  key={section.key}
+                  className="flex flex-col rounded-xl bg-muted/30 p-1 px-3"
+                >
+                  <legend className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {section.label}
+                  </legend>
 
-          <Input
-            type="date"
-            min={fromDate ?? undefined}
-            max={todayInputValue}
-            value={toDate ?? ""}
-            onChange={(event) => setToDate(event.target.value || null)}
-            className="w-full sm:w-40"
-            aria-label="To date"
-          />
+                  {/* 각 그룹 안 버튼들 가로 배열 */}
+                  <div className="flex flex-wrap items-center">
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFilterToggle(section.key, null)}
+                      className={cn(
+                        "h-8 px-3 text-xs font-medium border border-input bg-background",
+                        "-ml-px first:ml-0 first:rounded-l last:rounded-r",
+                        "transition-colors",
+                        allSelected
+                          ? "relative z-[1] border-primary bg-primary/10 text-primary"
+                          : "hover:bg-muted"
+                      )}
+                    >
+                      전체
+                    </button>
 
-          <Button variant="outline" onClick={handleRefresh} disabled={isLoadingRows}>
-            {isLoadingRows ? <IconLoader className="mr-2 size-4 animate-spin" /> : <IconReload className="mr-2 size-4" />}
-            Refresh
-          </Button>
-        </div>
-      </div>
-
-      {rowsError ? (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          <IconAlertCircle className="size-5 shrink-0" />
-          <span>{rowsError}</span>
+                    {section.options.map((option) => {
+                      const isActive = current === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleQuickFilterToggle(section.key, option.value)}
+                          className={cn(
+                            "h-8 px-3 text-xs font-medium border border-input bg-background",
+                            "-ml-px first:ml-0 first:rounded-l last:rounded-r",
+                            "transition-colors",
+                            isActive
+                              ? "relative z-[1] border-primary bg-primary/10 text-primary"
+                              : "hover:bg-muted"
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              )
+            })}
+          </div>
         </div>
       ) : null}
+
 
       <TableContainer className="flex-1 h-[calc(100vh-3rem)] overflow-y-auto rounded-lg border">
         <Table className="min-w-max" stickyHeader>
@@ -367,7 +589,10 @@ export function DataTable({ lineId }) {
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>Updated {isLoadingRows ? "just now" : lastUpdatedLabel ?? "just now"}</span>
           <span>
-            Showing {numberFormatter.format(currentPageSize)} of {numberFormatter.format(totalLoaded)} rows
+            Showing {numberFormatter.format(currentPageSize)} of {numberFormatter.format(filteredTotal)} rows
+            {filteredTotal !== totalLoaded
+              ? ` (filtered from ${numberFormatter.format(totalLoaded)})`
+              : ""}
           </span>
         </div>
 

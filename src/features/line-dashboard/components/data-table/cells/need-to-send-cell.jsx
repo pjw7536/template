@@ -36,7 +36,7 @@ export function NeedToSendCell({ meta, recordId, baseValue }) {
           aria-label="Toggle need to send"
         />
         <div className="flex flex-row items-center gap-1 text-xs text-muted-foreground">
-          {isChecked ? "Yes" : "No"}
+          {isChecked ? "Y" : "N"}
           {errorMessage ? (
             <div className="text-xs text-destructive">{errorMessage}</div>
           ) : indicatorStatus === "saving" ? (
