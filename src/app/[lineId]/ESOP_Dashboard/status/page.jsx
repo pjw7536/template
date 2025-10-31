@@ -1,8 +1,12 @@
-import { DataTable } from "@/features/line-dashboard/components/data-table"
+import { LineDashboardPage } from "@/features/line-dashboard/components"
 
 export default async function Page({ params }) {
-  const { lineId: raw } = await params; // ← 여기!
-  const lineId = Array.isArray(raw) ? raw[0] : raw ?? "";
+  const { lineId: raw } = await params
+  const lineId = Array.isArray(raw) ? raw[0] : raw ?? ""
 
-  return <div className="h-[calc(100vh-5rem)]"><DataTable lineId={lineId} />;</div>
+  return (
+    <div className="h-[calc(100vh-5rem)]">
+      <LineDashboardPage lineId={lineId} />
+    </div>
+  )
 }

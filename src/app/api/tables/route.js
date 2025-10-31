@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { runQuery } from "@/lib/db"
-import { DEFAULT_TABLE } from "@/features/line-dashboard/components/data-table/constants"
+import { DEFAULT_TABLE } from "@/features/line-dashboard/components/data-table/utils/constants"
 
 const SAFE_IDENTIFIER = /^[A-Za-z0-9_]+$/
 const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/

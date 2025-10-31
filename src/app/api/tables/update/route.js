@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getPool, runQuery } from "@/lib/db"
-import { DEFAULT_TABLE } from "@/features/line-dashboard/components/data-table/constants"
+import { DEFAULT_TABLE } from "@/features/line-dashboard/components/data-table/utils/constants"
 
 const SAFE_IDENTIFIER = /^[A-Za-z0-9_]+$/
 const ALLOWED_UPDATE_COLUMNS = new Set(["comment", "needtosend"])

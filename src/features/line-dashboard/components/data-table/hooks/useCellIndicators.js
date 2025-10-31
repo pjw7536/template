@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import { MIN_SAVING_VISIBLE_MS, SAVED_VISIBLE_MS, SAVING_DELAY_MS } from "./constants"
+import { MIN_SAVING_VISIBLE_MS, SAVED_VISIBLE_MS, SAVING_DELAY_MS } from "../utils/constants"
 
 // 각 셀 상태마다 관리하는 타이머 이름 정의
 const TIMER_NAMES = ["savingDelay", "transition", "savedCleanup"]

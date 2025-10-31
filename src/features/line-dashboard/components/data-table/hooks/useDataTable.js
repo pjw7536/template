@@ -2,8 +2,9 @@
 
 import * as React from "react"
 
-import { DEFAULT_TABLE, getDefaultFromValue, getDefaultToValue } from "./constants"
-import { useCellIndicators } from "./use-cell-indicators"
+import { DEFAULT_TABLE, getDefaultFromValue, getDefaultToValue } from "../utils/constants"
+import { composeEqpChamber, normalizeTablePayload } from "../../../utils"
+import { useCellIndicators } from "./useCellIndicators"
 
 function deleteKeys(record, keys) {
   if (keys.length === 0) return record
@@ -23,57 +24,6 @@ function removeKey(record, key) {
   delete next[key]
   return next
 }
-
-function normalizeTablePayload(payload) {
-  if (!payload || typeof payload !== "object") {
-    return {
-      table: DEFAULT_TABLE,
-      from: getDefaultFromValue(),
-      to: getDefaultToValue(),
-      rowCount: 0,
-      columns: [],
-      rows: [],
-    }
-  }
-
-  const normalizedColumns = Array.isArray(payload.columns)
-    ? payload.columns.filter((value) => typeof value === "string")
-    : []
-
-  const normalizedRows = Array.isArray(payload.rows)
-    ? payload.rows
-      .filter((row) => row && typeof row === "object")
-      .map((row) => ({ ...row }))
-    : []
-
-  const rowCountRaw = Number(payload.rowCount)
-  const normalizedRowCount = Number.isFinite(rowCountRaw) ? rowCountRaw : normalizedRows.length
-
-  const normalizedFrom = typeof payload.from === "string" ? payload.from : null
-  const normalizedTo = typeof payload.to === "string" ? payload.to : null
-
-  const normalizedTable = typeof payload.table === "string" ? payload.table : null
-
-  return {
-    table: normalizedTable,
-    from: normalizedFrom,
-    to: normalizedTo,
-    rowCount: normalizedRowCount,
-    columns: normalizedColumns,
-    rows: normalizedRows,
-  }
-}
-
-function makeEqpCb(eqpId, chamberIds) {
-  const a = (eqpId ?? "").toString().trim();
-  const b = (chamberIds ?? "").toString().trim();
-  if (a && b) return `${a}-${b}`;
-  if (a) return a;           // 한쪽만 있을 때도 자연스럽게
-  if (b) return b;
-  return "";                 // 둘 다 없으면 빈 문자열
-}
-
-
 
 export function useDataTableState({ lineId }) {
   const [selectedTable, setSelectedTable] = React.useState(DEFAULT_TABLE)
@@ -141,6 +91,11 @@ export function useDataTableState({ lineId }) {
 
       if (rowsRequestRef.current !== requestId) return
 
+      const defaults = {
+        table: DEFAULT_TABLE,
+        from: getDefaultFromValue(),
+        to: getDefaultToValue(),
+      }
       const {
         columns: fetchedColumns,
         rows: fetchedRows,
@@ -148,32 +103,32 @@ export function useDataTableState({ lineId }) {
         from: appliedFromValue,
         to: appliedToValue,
         table,
-      } = normalizeTablePayload(payload)
+      } = normalizeTablePayload(payload, defaults)
 
-      // 1) 일단 id는 숨김
       const baseColumns = fetchedColumns.filter(
         (column) => column && column.toLowerCase() !== "id"
-      );
-      // 2) 로우에 EQP_CB 필드 추가
+      )
+
       const composedRows = fetchedRows.map((row) => {
-        const eqpId = row?.eqp_id ?? row?.EQP_ID ?? row?.EqpId;           // 혹시 대소문자/케이스가 다를 수 있어 방어
-        const chamber = row?.chamber_ids ?? row?.CHAMBER_IDS ?? row?.ChamberIds;
+        const eqpId = row?.eqp_id ?? row?.EQP_ID ?? row?.EqpId
+        const chamber = row?.chamber_ids ?? row?.CHAMBER_IDS ?? row?.ChamberIds
         return {
           ...row,
-          EQP_CB: makeEqpCb(eqpId, chamber),
-        };
-      });
-      // 3) 컬럼 목록에서 eqp_id, chamber_ids는 제거하고 EQP_CB를 추가
-      const columnsWithoutOriginals = baseColumns.filter((c) => {
-        const lc = c.toLowerCase();
-        return lc !== "eqp_id" && lc !== "chamber_ids";
-      });
-      // 이미 포함돼 있지 않다면 EQP_CB 추가 (원하는 위치로 배치 가능: 맨 앞/맨 뒤 등)
+          EQP_CB: composeEqpChamber(eqpId, chamber),
+        }
+      })
+
+      const columnsWithoutOriginals = baseColumns.filter((column) => {
+        const normalized = column.toLowerCase()
+        return normalized !== "eqp_id" && normalized !== "chamber_ids"
+      })
+
       const nextColumns = columnsWithoutOriginals.includes("EQP_CB")
         ? columnsWithoutOriginals
-        : ["EQP_CB", ...columnsWithoutOriginals];
-      setColumns(nextColumns);
-      setRows(composedRows);
+        : ["EQP_CB", ...columnsWithoutOriginals]
+
+      setColumns(nextColumns)
+      setRows(composedRows)
       setLastFetchedCount(rowCount)
       setAppliedFrom(appliedFromValue ?? null)
       setAppliedTo(appliedToValue ?? null)

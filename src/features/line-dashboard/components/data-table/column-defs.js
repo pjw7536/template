@@ -4,15 +4,14 @@
 import Link from "next/link"
 import { ExternalLink, Check } from "lucide-react"
 
-import { STEP_COLUMN_KEY_SET } from "./constants"
-import { CommentCell } from "./cells/comment-cell"
-import { NeedToSendCell } from "./cells/need-to-send-cell"
+import { STEP_COLUMN_KEY_SET } from "./utils/constants"
+import { CommentCell, NeedToSendCell } from "./cells"
 import {
   formatCellValue,
   renderMetroStepFlow,
   parseMetroSteps,
   normalizeStepValue,
-} from "./utils"
+} from "./utils/formatters"
 
 /* =================================================================================
  * 구성 가능한 옵션 레이어 (UserConfig)
