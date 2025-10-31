@@ -1,17 +1,17 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-
 import { isMultiSelectFilter } from "./quickFilters"
 
 export function QuickFilters({ sections, filters, onToggle, onClear, activeCount }) {
   if (sections.length === 0) return null
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-2">
-      <div className="flex items-center gap-6">
-        <span className="text-xs font-semibold tracking-wide text-muted-foreground">Quick Filters</span>
-        {activeCount > 0 ? (
+    <fieldset className="flex flex-col gap-2 rounded-lg border p-2">
+      {/* ✅ 상위 legend로 제목 이동 */}
+      <legend className="flex items-center gap-6 text-xs font-semibold tracking-wide text-muted-foreground px-1">
+        <span>Quick Filters</span>
+        {activeCount > 0 && (
           <button
             type="button"
             onClick={onClear}
@@ -19,10 +19,11 @@ export function QuickFilters({ sections, filters, onToggle, onClear, activeCount
           >
             Clear all
           </button>
-        ) : null}
-      </div>
+        )}
+      </legend>
 
-      <div className="flex flex-wrap items-start gap-3">
+      {/* ✅ 하위 필터 그룹들 */}
+      <div className="flex flex-wrap items-start gap-2">
         {sections.map((section) => {
           const isMulti = isMultiSelectFilter(section.key)
           const current = filters[section.key]
@@ -34,8 +35,11 @@ export function QuickFilters({ sections, filters, onToggle, onClear, activeCount
           const allSelected = isMulti ? selectedValues.length === 0 : current === null
 
           return (
-            <fieldset key={section.key} className="flex flex-col rounded-xl bg-muted/30 p-1 px-3">
-              <legend className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <fieldset
+              key={section.key}
+              className="flex flex-col rounded-xl p-1 px-3"
+            >
+              <legend className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {section.label}
               </legend>
 
@@ -80,6 +84,6 @@ export function QuickFilters({ sections, filters, onToggle, onClear, activeCount
           )
         })}
       </div>
-    </div>
+    </fieldset>
   )
 }

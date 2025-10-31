@@ -11,7 +11,7 @@ function findMatchingColumn(columns, target) {
 const QUICK_FILTER_DEFINITIONS = [
   {
     key: "sdwt_prod",
-    label: "설비 SDWT",
+    label: "설비분임조",
     resolveColumn: (columns) => findMatchingColumn(columns, "sdwt_prod"),
     normalizeValue: (value) => {
       if (value == null) return null
@@ -23,7 +23,7 @@ const QUICK_FILTER_DEFINITIONS = [
   },
   {
     key: "user_sdwt_prod",
-    label: "User (SDWT)",
+    label: "Engr분임조",
     resolveColumn: (columns) => findMatchingColumn(columns, "user_sdwt_prod"),
     normalizeValue: (value) => {
       if (value == null) return null
