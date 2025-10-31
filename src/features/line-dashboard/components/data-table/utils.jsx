@@ -202,13 +202,9 @@ function getStepPillClasses({ isMain, isCurrent }) {
       : "bg-white border-border text-foreground"
   )
 }
+// 가정: normalizeStepValue, parseMetroSteps, uniquePreserveOrder, PLACEHOLDER,
+//       getStepPillClasses, IconArrowNarrowRight 는 기존과 동일하게 존재합니다.
 
-/** 스텝 플로우 렌더러 (규칙 반영본)
- * - main → metro_steps[] → inform 순서로 표시
- * - 현재 스텝(metro_current_step)은 연한 파란색 배경
- * - main_step은 모서리 없음(사각형)
- * - custom_end_step가 있으면 해당 스텝 아래에 'End' 라벨 표시
- */
 export function renderMetroStepFlow(rowData) {
   const mainStep = normalizeStepValue(rowData.main_step)
   const metroSteps = parseMetroSteps(rowData.metro_steps)
@@ -216,53 +212,94 @@ export function renderMetroStepFlow(rowData) {
   const currentStep = normalizeStepValue(rowData.metro_current_step)
   const customEndStep = normalizeStepValue(rowData.custom_end_step)
   const metroEndStep = normalizeStepValue(rowData.metro_end_step)
+  const needToSend = Number(rowData.needtosend) === 1 ? 1 : 0
 
-  // END 위치 결정 우선순위: custom_end_step > metro_end_step
+  // END 위치 결정: custom_end_step > metro_end_step
   const endStep = customEndStep || metroEndStep
 
+  // 표시 순서: MAIN → METRO 배열 → INFORM (중복은 순서 유지하며 제거)
   const orderedSteps = uniquePreserveOrder([
     ...(mainStep ? [mainStep] : []),
     ...metroSteps,
     ...(informStep ? [informStep] : []),
   ])
-
   if (orderedSteps.length === 0) return PLACEHOLDER.noSteps
 
+  // 라벨 스타일
   const labelClasses = {
     MAIN: "text-[10px] leading-none text-muted-foreground",
+    END: "text-[10px] leading-none text-muted-foreground",
     CustomEND: "text-[10px] leading-none font-semibold text-blue-500",
-    END: "text-[10px] leading-none text-muted-foreground"
+    "인폼예정": "text-[10px] leading-none text-gray-500",
+    "Inform 완료": "text-[10px] leading-none font-semibold text-blue-600",
   }
 
-  return (
-    <div className="flex flex-wrap items-upper gap-1">
-      {orderedSteps.map((step, index) => {
-        const isMain = mainStep ? step === mainStep : false
-        const isCurrent = currentStep ? step === currentStep : false
+  // ───────────────────────────────────────────────────────────────────────────────
+  // ✅ 인폼 라벨 결정 로직 (요구사항 그대로)
+  // needtosend = 0 → MAIN 외 모든 라벨 숨김
+  // needtosend = 1 →
+  //   - inform_step 있으면: 해당 스텝에 "Inform 완료" (예정 라벨은 표시하지 않음)
+  //   - inform_step 없으면:
+  //       custom_end_step O → custom_end_step에만 "인폼예정"
+  //       custom_end_step X → metro_end_step에 "인폼예정"
+  // ───────────────────────────────────────────────────────────────────────────────
+  let informLabelType = "none"            // "none" | "done" | "planned"
+  let informLabelStep = null
 
-        /** @type {string[]} */
-        const belowLabels = []
-        if (mainStep && step === mainStep) belowLabels.push("MAIN")
-        if (informStep && step === informStep) belowLabels.push("END")
-        if (endStep && step === endStep) belowLabels.push("CustomEND")
+  if (needToSend === 1) {
+    if (informStep) {
+      informLabelType = "done"
+      informLabelStep = informStep
+    } else if (customEndStep) {
+      informLabelType = "planned"
+      informLabelStep = customEndStep
+    } else if (metroEndStep) {
+      informLabelType = "planned"
+      informLabelStep = metroEndStep
+    }
+  }
+  // needToSend === 0 인 경우 informLabelType 은 "none" 유지
+
+  return (
+    <div className="flex flex-wrap items-start gap-1">
+      {orderedSteps.map((step, index) => {
+        const isMain = !!mainStep && step === mainStep
+        const isCurrent = !!currentStep && step === currentStep
+        const labels = new Set()
+
+        if (isMain) labels.add("MAIN")
+
+        // 🔎 이 두 값을 먼저 계산
+        const isEndHere = needToSend === 1 && endStep && step === endStep
+        const isInformHere =
+          informLabelType !== "none" && informLabelStep && step === informLabelStep
+
+        // ✅ END/CustomEND는 Inform 라벨이 없는 경우에만 표기
+        if (isEndHere && !isInformHere) {
+          labels.add(customEndStep ? "CustomEND" : "END")
+        }
+
+        // ✅ Inform 라벨(완료/예정) 표기
+        if (isInformHere) {
+          labels.add(informLabelType === "done" ? "Inform 완료" : "인폼예정")
+        }
 
         return (
           <div key={`${step}-${index}`} className="flex items-start gap-1">
             {index > 0 && (
               <IconArrowNarrowRight className="size-4 shrink-0 text-muted-foreground mt-0.5" />
             )}
-
-            {/* 세로 스택: 스텝 배지 + 라벨 */}
             <div className="flex flex-col items-center gap-0.5">
               <span className={getStepPillClasses({ isMain, isCurrent })}>
                 {step}
               </span>
-
-              {belowLabels.map((label, i) => (
+              {[...labels].map((label, i) => (
                 <span
                   key={`${step}-label-${i}`}
                   className={labelClasses[label] || "text-[10px] leading-none text-muted-foreground"}
-                >{label}</span>
+                >
+                  {label}
+                </span>
               ))}
             </div>
           </div>

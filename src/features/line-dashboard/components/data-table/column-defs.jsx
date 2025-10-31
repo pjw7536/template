@@ -7,7 +7,12 @@ import { ExternalLink, Check } from "lucide-react"
 import { STEP_COLUMN_KEY_SET } from "./constants"
 import { CommentCell } from "./cells/comment-cell"
 import { NeedToSendCell } from "./cells/need-to-send-cell"
-import { formatCellValue, renderMetroStepFlow, parseMetroSteps, normalizeStepValue } from "./utils"
+import {
+  formatCellValue,
+  renderMetroStepFlow,
+  parseMetroSteps,
+  normalizeStepValue,
+} from "./utils"
 
 /* =================================================================================
  * 구성 가능한 옵션 레이어 (UserConfig)
@@ -60,12 +65,14 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     "needtosend",
     "send_jira",
     "informed_at",
+    "jira_key",
     "user_sdwt_prod",
   ],
 
   // 표시 이름 기본 매핑 (원하면 userConfig.labels로 덮어쓰기)
   labels: {
     defect_url: "Defect",
+    jira_key: "Jira", // ⬅️ Jira 컬럼 라벨
     comment: "Comment",
     needtosend: "예약",
     send_jira: "JIRA",
@@ -75,8 +82,10 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
   },
 
   // 기본 정렬 허용/비허용
+  // 링크 컬럼(외부 이동)은 보통 정렬 비권장
   sortable: {
     defect_url: false,
+    jira_key: false, // ⬅️ Jira 링크 컬럼 정렬 비활성화(원하면 true로 바꾸세요)
     comment: true,
     needtosend: true,
     send_jira: true,
@@ -104,6 +113,10 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     lot_id: 90,
     sample_type: 150,
 
+    // 링크류
+    defect_url: 80,
+    jira_key: 160, // ⬅️ Jira 키 텍스트+아이콘에 적절한 폭
+
     // 긴 텍스트
     comment: 350,
 
@@ -115,12 +128,13 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
   // 병합 스텝 라벨
   processFlowHeader: "process_flow",
 
-  // 정렬 방향
+  // 정렬 방향(셀/헤더)
   cellAlign: {
     line_id: "center",
     EQP_CB: "center",
     lot_id: "center",
     defect_url: "center",
+    jira_key: "center", // ⬅️ Jira 키도 중앙 정렬
     send_jira: "center",
     status: "center",
     needtosend: "center",
@@ -134,6 +148,7 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
   headerAlign: {
     needtosend: "center",
     send_jira: "center",
+    jira_key: "center", // ⬅️ 헤더 정렬
     status: "center",
     knoxid: "center",
     user_sdwt_prod: "center",
@@ -162,6 +177,7 @@ function mergeConfig(userConfig) {
  * 공통 유틸
  * ================================================================================= */
 
+/** 문자열을 http(s) URL로 정규화(스킴 없으면 https 가정) */
 function toHttpUrl(raw) {
   if (raw == null) return null
   const s = String(raw).trim()
@@ -170,10 +186,25 @@ function toHttpUrl(raw) {
   return `https://${s}`
 }
 
+/** 행의 id를 문자열로 안전 추출 */
 function getRecordId(rowOriginal) {
   const rawId = rowOriginal?.id
   if (rawId === undefined || rawId === null) return null
   return String(rawId)
+}
+
+/** Jira 키(예: ABC-123)를 안전히 정규화 */
+function normalizeJiraKey(raw) {
+  if (raw == null) return null
+  const s = String(raw).trim().toUpperCase()
+  // 간단한 패턴 필터: PROJECTKEY-숫자
+  return /^[A-Z0-9]+-\d+$/.test(s) ? s : null
+}
+
+/** Jira 브라우즈 URL 생성: https://jira.apple.net/browse/{KEY} */
+function buildJiraBrowseUrl(jiraKey) {
+  const key = normalizeJiraKey(jiraKey)
+  return key ? `https://jira.apple.net/browse/${key}` : null
 }
 
 function normalizeComment(raw) {
@@ -207,16 +238,14 @@ function normalizeStatus(raw) {
   return s
 }
 
+/** 진행률 계산: main_step + metro_steps 상에서 current/end/complete 고려 */
 function computeMetroProgress(rowOriginal, normalizedStatus) {
   const mainStep = normalizeStepValue(rowOriginal?.main_step)
   const metroSteps = parseMetroSteps(rowOriginal?.metro_steps)
   const customEndStep = normalizeStepValue(rowOriginal?.custom_end_step)
   const currentStep = normalizeStepValue(rowOriginal?.metro_current_step)
 
-  // ----------------------------------------
-  // ① 유효한 metro step 목록 계산
-  // custom_end_step이 있으면 그 이전까지만 유효 단계로 계산
-  // ----------------------------------------
+  // ① 유효한 metro step 목록 계산 (custom_end_step 전까지만 유효)
   const effectiveMetroSteps = (() => {
     if (!metroSteps.length) return []
     if (!customEndStep) return metroSteps
@@ -224,9 +253,7 @@ function computeMetroProgress(rowOriginal, normalizedStatus) {
     return endIndex >= 0 ? metroSteps.slice(0, endIndex + 1) : metroSteps
   })()
 
-  // ----------------------------------------
-  // ② mainStep + metroSteps 결합
-  // ----------------------------------------
+  // ② main + metro 결합
   const orderedSteps = []
   if (mainStep) orderedSteps.push(mainStep)
   orderedSteps.push(...effectiveMetroSteps)
@@ -234,38 +261,28 @@ function computeMetroProgress(rowOriginal, normalizedStatus) {
   const total = orderedSteps.length
   if (total === 0) return { completed: 0, total: 0 }
 
-  // ----------------------------------------
   // ③ 현재 단계 위치 계산
-  // ----------------------------------------
   let completed = 0
 
-  // currentStep이 없는 경우 → 진행 0%
   if (!currentStep) {
     completed = 0
   } else {
     const currentIndex = orderedSteps.findIndex((step) => step === currentStep)
 
-    // custom_end_step보다 뒤 단계까지 갔을 경우 → 강제 100%
     if (customEndStep) {
-      const endIndex = orderedSteps.findIndex((step) => step === customEndStep)
       const currentIndexInFull = metroSteps.findIndex((step) => step === currentStep)
       const endIndexInFull = metroSteps.findIndex((step) => step === customEndStep)
-
       if (currentIndexInFull >= 0 && endIndexInFull >= 0 && currentIndexInFull > endIndexInFull) {
-        completed = total
+        completed = total // end 이후면 강제 100%
       } else if (currentIndex >= 0) {
         completed = currentIndex + 1
       }
-    }
-    // custom_end_step이 없으면 기존 로직 유지
-    else if (currentIndex >= 0) {
+    } else if (currentIndex >= 0) {
       completed = currentIndex + 1
     }
   }
 
-  // ----------------------------------------
-  // ④ 상태가 COMPLETE인 경우 → 전체 완료
-  // ----------------------------------------
+  // ④ 상태 COMPLETE면 100%
   if (normalizedStatus === "COMPLETE") {
     completed = total
   }
@@ -276,9 +293,8 @@ function computeMetroProgress(rowOriginal, normalizedStatus) {
   }
 }
 
-
 /* =================================================================================
- * 정렬 유틸 (TanStack v8의 sortingFn에 comparator 제공)
+ * 정렬 유틸 (TanStack v8 sortingFn comparator)
  * ================================================================================= */
 
 function isNumeric(value) {
@@ -359,8 +375,10 @@ function getSortingFnForKey(colKey, config, sampleValue) {
   const t = (config.sortTypes && config.sortTypes[colKey]) || "auto"
   const sortType = t === "auto" ? autoSortType(sampleValue) : t
 
-  if (sortType === "number") return (rowA, rowB) => cmpNumber(rowA.getValue(colKey), rowB.getValue(colKey))
-  if (sortType === "datetime") return (rowA, rowB) => cmpDate(rowA.getValue(colKey), rowB.getValue(colKey))
+  if (sortType === "number")
+    return (rowA, rowB) => cmpNumber(rowA.getValue(colKey), rowB.getValue(colKey))
+  if (sortType === "datetime")
+    return (rowA, rowB) => cmpDate(rowA.getValue(colKey), rowB.getValue(colKey))
   // 기본 text
   return (rowA, rowB) => cmpText(rowA.getValue(colKey), rowB.getValue(colKey))
 }
@@ -412,7 +430,7 @@ function resolveColumnSizes(colKey, config, sampleValue) {
  * @property {any} meta
  */
 const CellRenderers = {
-  /** 🔗 defect_url: 아이콘 하이퍼링크 */
+  /** 🔗 defect_url: 아이콘 하이퍼링크(아이콘만 노출) */
   defect_url: ({ value }) => {
     const href = toHttpUrl(value)
     if (!href) return null
@@ -421,9 +439,34 @@ const CellRenderers = {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+        className="inline-flex items-center justify-center text-blue-600 hover:underline"
         aria-label="Open defect URL in a new tab"
+        title="Open defect"
       >
+        <ExternalLink className="h-4 w-4" />
+      </Link>
+    )
+  },
+
+  /**
+   * 🧷 jira_key: https://jira.apple.net/browse/{JiraKey} 로 변환하여
+   * 하이퍼링크 + 외부링크 아이콘을 함께 표시
+   * - 키 텍스트도 함께 보여주어 한눈에 확인 가능
+   */
+  jira_key: ({ value }) => {
+    const key = normalizeJiraKey(value)
+    const href = buildJiraBrowseUrl(key)
+    if (!href || !key) return null
+    return (
+      <Link
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+        aria-label={`Open JIRA issue ${key} in a new tab`}
+        title={key}
+      >
+        {/* <span className="font-medium">{key}</span> */}
         <ExternalLink className="h-4 w-4" />
       </Link>
     )
@@ -477,7 +520,7 @@ const CellRenderers = {
     )
   },
 
-  /** 🧭 status: 상태별 아이콘/색상 */
+  /** 🧭 status: 진행률 바 + 라벨 */
   status: ({ value, rowOriginal }) => {
     const st = normalizeStatus(value)
     const labels = {
@@ -544,7 +587,10 @@ function pickStepColumnsWithIndex(columns) {
 
 function shouldCombineSteps(stepCols) {
   if (!stepCols.length) return false
-  return stepCols.some(({ key }) => key === "main_step") || stepCols.some(({ key }) => key === "metro_steps")
+  return (
+    stepCols.some(({ key }) => key === "main_step") ||
+    stepCols.some(({ key }) => key === "metro_steps")
+  )
 }
 
 function getSampleValueForColumns(row, columns) {
@@ -584,7 +630,7 @@ function makeColumnDef(colKey, config, sampleValueFromFirstRow) {
   const enableSorting =
     (config.sortable && typeof config.sortable[colKey] === "boolean")
       ? config.sortable[colKey]
-      : colKey !== "defect_url" // 기본 규칙(링크 컬럼은 비권장)
+      : colKey !== "defect_url" && colKey !== "jira_key" // 링크 컬럼은 기본 비권장
 
   // sortingFn: 정렬 허용일 때만 타입별 comparator 제공
   const sortingFn = enableSorting
@@ -676,14 +722,16 @@ export function createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess) {
  * ---------------------------------------------------------------------------------
  * const cols = Object.keys(rows[0] ?? {})
  * const defs = createColumnDefs(cols, {
- *   order: ["status","process_flow","lot_id","defect_url","comment","needtosend"],
+ *   order: ["status","process_flow","lot_id","defect_url","jira_key","comment","needtosend"],
  *   labels: {
  *     lot_id: "LOT",
  *     process_flow: "Flow",
  *     needtosend: "Send?",
+ *     jira_key: "Jira",
  *   },
  *   sortable: {
  *     defect_url: false,
+ *     jira_key: false, // 텍스트 정렬 원하면 true
  *     send_jira: false,
  *     status: true,
  *   },
@@ -696,13 +744,16 @@ export function createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess) {
  *     status: 180,
  *     process_flow: 320,
  *     comment: 260,
+ *     jira_key: 160,
  *   },
  *   cellAlign: {
  *     defect_url: "center",
+ *     jira_key: "center",
  *     needtosend: "right",
  *   },
  *   headerAlign: {
  *     needtosend: "right",
+ *     jira_key: "center",
  *   },
  *   processFlowHeader: "process_flow", // 또는 "Flow"
  * }, rows?.[0])
