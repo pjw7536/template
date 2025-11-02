@@ -42,7 +42,7 @@ const DEFAULT_TEXT_WIDTH = 140
 const DEFAULT_NUMBER_WIDTH = 110
 const DEFAULT_ID_WIDTH = 130
 const DEFAULT_DATE_WIDTH = 100
-const DEFAULT_BOOL_ICON_WIDTH = 60
+const DEFAULT_BOOL_ICON_WIDTH = 70
 const DEFAULT_PROCESS_FLOW_WIDTH = 360
 
 /** 기본 설정 */
@@ -491,17 +491,23 @@ const CellRenderers = {
     )
   },
 
-  /** ✅ needtosend: 토글 */
+  /** ✅ needtosend: 토글 (send_jira=1이면 비활성) */
   needtosend: ({ value, rowOriginal, meta }) => {
     const recordId = getRecordId(rowOriginal)
     if (!meta || !recordId) {
       return formatCellValue(value)
     }
+
+    const baseValue = normalizeNeedToSend(rowOriginal?.needtosend) // 0|1
+    const isLocked = Number(rowOriginal?.send_jira) === 1
+
     return (
       <NeedToSendCell
         meta={meta}
         recordId={recordId}
-        baseValue={normalizeNeedToSend(rowOriginal?.needtosend)}
+        baseValue={baseValue}
+        disabled={isLocked}
+        disabledReason="이미 JIRA 전송됨 (needtosend 수정 불가)"
       />
     )
   },
@@ -513,7 +519,7 @@ const CellRenderers = {
       <span
         className={[
           "inline-flex h-5 w-5 items-center justify-center rounded-full border",
-          ok ? "bg-emerald-500 border-emerald-500" : "border-muted-foreground/30",
+          ok ? "bg-blue-500 border-blue-500" : "border-muted-foreground/30",
         ].join(" ")}
         title={ok ? "Sent to JIRA" : "Not sent"}
         aria-label={ok ? "Sent to JIRA" : "Not sent"}

@@ -208,16 +208,17 @@ function getStepPillClasses({ isMain, isCurrent }) {
 export function renderMetroStepFlow(rowData) {
   const mainStep = normalizeStepValue(rowData.main_step)
   const metroSteps = parseMetroSteps(rowData.metro_steps)
-  const informStep = normalizeStepValue(rowData.inform_step)
+  const informStep = normalizeStepValue(rowData.inform_step)           // ✅ 위치 정보로만 사용
   const currentStep = normalizeStepValue(rowData.metro_current_step)
   const customEndStep = normalizeStepValue(rowData.custom_end_step)
   const metroEndStep = normalizeStepValue(rowData.metro_end_step)
-  const needToSend = Number(rowData.needtosend) === 1 ? 1 : 0
+  const needToSend = Number(rowData.needtosend) === 1 ? 1 : 0          // 예약(보낼 예정)
+  const sendjira = Number(rowData.send_jira) === 1 ? 1 : 0             // ✅ 실제 “인폼 완료” 플래그
 
-  // END 위치 결정: custom_end_step > metro_end_step
+  // END 표시 후보: custom_end_step 우선 → metro_end_step
   const endStep = customEndStep || metroEndStep
 
-  // 표시 순서: MAIN → METRO 배열 → INFORM (중복은 순서 유지하며 제거)
+  // 표시 순서: MAIN → METRO 배열 → INFORM(중복 제거, 순서 보존)
   const orderedSteps = uniquePreserveOrder([
     ...(mainStep ? [mainStep] : []),
     ...metroSteps,
@@ -225,7 +226,6 @@ export function renderMetroStepFlow(rowData) {
   ])
   if (orderedSteps.length === 0) return PLACEHOLDER.noSteps
 
-  // 라벨 스타일
   const labelClasses = {
     MAIN: "text-[10px] leading-none text-muted-foreground",
     END: "text-[10px] leading-none text-muted-foreground",
@@ -234,23 +234,20 @@ export function renderMetroStepFlow(rowData) {
     "Inform 완료": "text-[10px] leading-none font-semibold text-blue-600",
   }
 
-  // ───────────────────────────────────────────────────────────────────────────────
-  // ✅ 인폼 라벨 결정 로직 (요구사항 그대로)
-  // needtosend = 0 → MAIN 외 모든 라벨 숨김
-  // needtosend = 1 →
-  //   - inform_step 있으면: 해당 스텝에 "Inform 완료" (예정 라벨은 표시하지 않음)
-  //   - inform_step 없으면:
-  //       custom_end_step O → custom_end_step에만 "인폼예정"
-  //       custom_end_step X → metro_end_step에 "인폼예정"
-  // ───────────────────────────────────────────────────────────────────────────────
-  let informLabelType = "none"            // "none" | "done" | "planned"
+  // ─────────────────────────────────────────────────────────────
+  // ✅ 인폼 라벨 결정 (완료 여부는 sendjira로만 판단)
+  // - sendjira = 1          → Inform 완료 (위치는 inform_step || endStep)
+  // - sendjira = 0, need=1  → 인폼예정   (위치는 custom_end_step || metro_end_step)
+  // - 그 외                 → 라벨 없음
+  // ─────────────────────────────────────────────────────────────
+  let informLabelType = "none"  // "none" | "done" | "planned"
   let informLabelStep = null
 
-  if (needToSend === 1) {
-    if (informStep) {
-      informLabelType = "done"
-      informLabelStep = informStep
-    } else if (customEndStep) {
+  if (sendjira === 1) {
+    informLabelType = "done"
+    informLabelStep = informStep || endStep || null
+  } else if (needToSend === 1) {
+    if (customEndStep) {
       informLabelType = "planned"
       informLabelStep = customEndStep
     } else if (metroEndStep) {
@@ -258,7 +255,6 @@ export function renderMetroStepFlow(rowData) {
       informLabelStep = metroEndStep
     }
   }
-  // needToSend === 0 인 경우 informLabelType 은 "none" 유지
 
   return (
     <div className="flex flex-wrap items-start gap-1">
@@ -269,17 +265,18 @@ export function renderMetroStepFlow(rowData) {
 
         if (isMain) labels.add("MAIN")
 
-        // 🔎 이 두 값을 먼저 계산
-        const isEndHere = needToSend === 1 && endStep && step === endStep
-        const isInformHere =
+        // 현재 스텝에 붙일 라벨 여부
+        const isEndHere = Boolean(endStep && step === endStep)
+        const isInformHere = Boolean(
           informLabelType !== "none" && informLabelStep && step === informLabelStep
+        )
 
-        // ✅ END/CustomEND는 Inform 라벨이 없는 경우에만 표기
-        if (isEndHere && !isInformHere) {
+        // ✅ END/CustomEND는 Inform 라벨이 없을 때만 표기(겹침 방지)
+        if (!isInformHere && isEndHere) {
           labels.add(customEndStep ? "CustomEND" : "END")
         }
 
-        // ✅ Inform 라벨(완료/예정) 표기
+        // ✅ Inform 라벨(완료/예정)
         if (isInformHere) {
           labels.add(informLabelType === "done" ? "Inform 완료" : "인폼예정")
         }
@@ -308,6 +305,7 @@ export function renderMetroStepFlow(rowData) {
     </div>
   )
 }
+
 
 
 
