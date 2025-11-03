@@ -59,12 +59,14 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     "sample_group",
     "lot_id",
     "status",
-    "comment",
     "process_flow",
+    "comment",
     "needtosend",
     "send_jira",
     "informed_at",
     "jira_key",
+    "defect_url",
+    "knoxid",
     "user_sdwt_prod",
   ],
 
@@ -102,26 +104,26 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
 
   // ⛳ 기본 폭 힌트 (없으면 타입/키명 기반으로 안전한 기본값 추론)
   width: {
-    // 아이콘/불린류
-    needtosend: DEFAULT_BOOL_ICON_WIDTH,
-    send_jira: DEFAULT_BOOL_ICON_WIDTH,
+    created_at: 90,
+    line_id: 70,
+    sdwt_prod: 120,
+    EQP_CB: 110,
+    proc_id: 110,
+    ppid: 80,
+    sample_type: 200,
+    sample_group: 200,
+    lot_id: 100,
     status: 150,
-
-    // 식별자/ID류
-    line_id: 90,
-    lot_id: 90,
-    sample_type: 150,
-
-    // 링크류
-    defect_url: 80,
-    jira_key: 160, // ⬅️ Jira 키 텍스트+아이콘에 적절한 폭
-
-    // 긴 텍스트
-    comment: 350,
-
-    // 스텝 플로우(병합 컬럼)
     process_flow: 600,
-    user_sdwt_prod: 150,
+    comment: 400,
+    needtosend: 40,
+    send_jira: 40,
+    informed_at: 100,
+    jira_key: 40,
+    defect_url: 60,
+    knoxid: 100,
+    user_sdwt_prod: 120,
+    updated_at: 90,
   },
 
   // 병합 스텝 라벨
@@ -129,31 +131,47 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
 
   // 정렬 방향(셀/헤더)
   cellAlign: {
+    created_at: "center",
     line_id: "center",
-    EQP_CB: "center",
+    sdwt_prod: "left",
+    EQP_CB: "left",
+    proc_id: "left",
+    ppid: "left",
+    sample_type: "left",
+    sample_group: "left",
     lot_id: "center",
-    defect_url: "center",
-    jira_key: "center", // ⬅️ Jira 키도 중앙 정렬
-    send_jira: "center",
     status: "center",
+    process_flow: "left",
+    comment: "left",
     needtosend: "center",
-    sdwt_prod: "center",
-    sample_type: "center",
-    sample_group: "center",
+    send_jira: "center",
+    informed_at: "center",
+    jira_key: "center",
+    defect_url: "center",
     knoxid: "center",
     user_sdwt_prod: "center",
-    ppid: "center",
+
   },
   headerAlign: {
-    needtosend: "center",
-    send_jira: "center",
-    jira_key: "center", // ⬅️ 헤더 정렬
-    status: "center",
-    knoxid: "center",
-    user_sdwt_prod: "center",
-    sample_type: "center",
-    sample_group: "center",
-    ppid: "center",
+    created_at: "left",
+    line_id: "left",
+    sdwt_prod: "left",
+    EQP_CB: "left",
+    proc_id: "left",
+    ppid: "left",
+    sample_type: "left",
+    sample_group: "left",
+    lot_id: "left",
+    status: "left",
+    process_flow: "left",
+    comment: "left",
+    needtosend: "left",
+    send_jira: "left",
+    informed_at: "left",
+    jira_key: "left",
+    defect_url: "left",
+    knoxid: "left",
+    user_sdwt_prod: "left",
   },
 })
 

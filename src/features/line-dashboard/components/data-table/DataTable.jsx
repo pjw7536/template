@@ -197,13 +197,13 @@ export function DataTable({ lineId }) {
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-3 px-4 lg:px-6">
-      <div className="flex flex-wrap items-end gap-12">
+      <div className="flex flex-wrap items-start gap-12">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-lg font-semibold">
             <IconDatabase className="size-5" />
             {lineId}Line E-SOP Status
             <span className="ml-2 text-[10px] font-normal text-muted-foreground self-end">
-              Updated {isLoadingRows ? "just now" : lastUpdatedLabel ?? "just now"}
+              Updated {lastUpdatedLabel}
             </span>
           </div>
 
@@ -212,7 +212,7 @@ export function DataTable({ lineId }) {
         <div className="flex self-end gap-2">
           <GlobalFilter value={filter} onChange={setFilter} />
           <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-1">
-            <IconRefresh className="size-4" />
+            <IconRefresh className="size-3" />
             Refresh
           </Button>
         </div>
