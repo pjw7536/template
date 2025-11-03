@@ -108,8 +108,14 @@ export function DataTable({ lineId }) {
    *    - Compiler가 안전하게 캐시/참조 안정성을 보장
    * ──────────────────────────────────────────────────────────────────────── */
   const firstRow = rows[0]
-  const columnDefs = createColumnDefs(columns, undefined, firstRow)
-  const globalFilterFn = createGlobalFilterFn(columns)
+  const columnDefs = React.useMemo(
+    () => createColumnDefs(columns, undefined, firstRow),
+    [columns, firstRow]
+  )
+  const globalFilterFn = React.useMemo(
+    () => createGlobalFilterFn(columns),
+    [columns]
+  )
 
   /* 페이지네이션/컬럼 사이징 로컬 상태 */
   const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize: 15 })
@@ -336,25 +342,26 @@ export function DataTable({ lineId }) {
                   const headerContent = flexRender(header.column.columnDef.header, header.getContext())
                   const width = header.getSize()
 
+                  const ariaSort =
+                    sortDirection === "asc"
+                      ? "ascending"
+                      : sortDirection === "desc"
+                        ? "descending"
+                        : "none"
+
                   return (
                     <TableHead
                       key={header.id}
                       className={cn("relative whitespace-nowrap sticky top-0 z-10 bg-muted")}
                       style={{ width, minWidth: width, maxWidth: width }}
                       scope="col"
+                      aria-sort={ariaSort}
                     >
                       {canSort ? (
                         <button
                           className={cn("flex w-full items-center gap-1", justifyClass)}
                           onClick={header.column.getToggleSortingHandler()}
                           aria-label={`Sort by ${String(header.column.id)}`}
-                          aria-sort={
-                            sortDirection === "asc"
-                              ? "ascending"
-                              : sortDirection === "desc"
-                                ? "descending"
-                                : "none"
-                          }
                         >
                           {headerContent}
                           {sortDirection === "asc" && <IconChevronUp className="size-4" />}
