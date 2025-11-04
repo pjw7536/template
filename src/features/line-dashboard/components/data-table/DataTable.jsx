@@ -1,10 +1,18 @@
+// /src/features/line-dashboard/components/data-table/DataTable.jsx
 "use client"
 
 /**
- * DataTable.jsx (React 19용: useMemo/useCallback 제거 버전)
- * - React Compiler가 참조 안정성과 계산 캐시를 자동 최적화해 주므로
- *   명시적 useMemo/useCallback 없이도 성능/재렌더를 안전하게 유지합니다.
- * - TanStack Table v8: 정렬/검색/컬럼 사이징/페이지네이션/퀵필터 동일 동작
+ * DataTable.jsx (React 19 최적화 버전)
+ * ---------------------------------------------------------------------------
+ * ✅ 핵심
+ * 1) "현재 보이는 데이터(필터 반영 filteredRows)" 기준으로 process_flow / comment 자동폭 계산
+ * 2) <colgroup> + TH/TD width 동기화 ⇒ 컬럼 전체 폭이 일관되게 변함
+ * 3) TanStack Table v8: 정렬/검색/컬럼 사이징/페이지네이션/퀵필터 그대로 유지
+ * 4) React 19: useMemo/useCallback 최소화 (필요한 지점만 사용)
+ *
+ * ⚠️ 팁
+ * - auto width 계산은 column-defs.jsx 내부의 createColumnDefs가 담당합니다.
+ *   여기서는 그때그때 "filteredRows"를 rowsForSizing으로 넘겨주면 끝!
  */
 
 import * as React from "react"
@@ -86,6 +94,8 @@ const LABELS = {
 export function DataTable({ lineId }) {
   /* ──────────────────────────────────────────────────────────────────────────
    * 2) 데이터/상태 훅
+   *    - rows: 서버/쿼리로 가져온 원본 데이터
+   *    - filteredRows: QuickFilters + GlobalFilter 적용된 "현재 보이는" 데이터
    * ──────────────────────────────────────────────────────────────────────── */
   const {
     columns,
@@ -104,14 +114,18 @@ export function DataTable({ lineId }) {
     useQuickFilters(columns, rows)
 
   /* ──────────────────────────────────────────────────────────────────────────
-   * 3) React 19 스타일: 계산은 그냥 선언
-   *    - Compiler가 안전하게 캐시/참조 안정성을 보장
+   * 3) React 19 스타일: 필요한 지점만 useMemo
+   *    - 자동폭 계산의 기준은 "현재 보이는 데이터"여야 체감이 좋습니다.
    * ──────────────────────────────────────────────────────────────────────── */
-  const firstRow = rows[0]
+  const firstVisibleRow = filteredRows[0]
+
+  // ✅ 컬럼 정의: filteredRows를 rowsForSizing으로 넘겨 "현재 보이는 데이터 기준 자동폭" 실현
   const columnDefs = React.useMemo(
-    () => createColumnDefs(columns, undefined, firstRow),
-    [columns, firstRow]
+    () => createColumnDefs(columns, undefined, firstVisibleRow, filteredRows),
+    [columns, firstVisibleRow, filteredRows]
   )
+
+  // 글로벌 필터 함수: 컬럼 스키마가 바뀔 때만 재생성
   const globalFilterFn = React.useMemo(
     () => createGlobalFilterFn(columns),
     [columns]
@@ -124,8 +138,8 @@ export function DataTable({ lineId }) {
   /* TanStack Table 인스턴스 */
   /* eslint-disable react-hooks/incompatible-library */
   const table = useReactTable({
-    data: filteredRows,
-    columns: columnDefs,
+    data: filteredRows,               // ✅ 보이는 데이터로 테이블 구성
+    columns: columnDefs,              // ✅ 동적 폭 반영된 컬럼 정의
     meta: tableMeta,
     state: {
       sorting,
@@ -138,10 +152,14 @@ export function DataTable({ lineId }) {
     onPaginationChange: setPagination,
     onColumnSizingChange: setColumnSizing,
     globalFilterFn,
+
+    // Row models
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+
+    // 드래그 중 실시간 리사이즈 반영
     columnResizeMode: "onChange",
   })
   /* eslint-enable react-hooks/incompatible-library */
@@ -180,15 +198,16 @@ export function DataTable({ lineId }) {
   }, [table, rows.length, filteredRows.length, pagination.pageSize])
 
   /* ──────────────────────────────────────────────────────────────────────────
-   * 5) 이벤트 핸들러 (그냥 함수로 선언)
+   * 5) 이벤트 핸들러
    * ──────────────────────────────────────────────────────────────────────── */
   function handleRefresh() {
     void fetchRows()
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
-   * 6) 테이블 바디 렌더 (그냥 함수로 선언)
+   * 6) 테이블 바디 렌더
    *    - 상태별 분기: 로딩 → 에러 → 스키마 없음 → 필터 결과 없음 → 일반 행
+   *    - TH/TD에 width/min/max를 "px 문자열"로 지정해 colgroup과 일관 동작
    * ──────────────────────────────────────────────────────────────────────── */
   function renderTableBody() {
     if (isLoadingRows) {
@@ -253,6 +272,7 @@ export function DataTable({ lineId }) {
           const align = resolveCellAlignment(cell.column.columnDef.meta) // "left" | "center" | "right"
           const textAlignClass = getTextAlignClass(align)
           const width = cell.column.getSize()
+          const widthPx = `${width}px`
 
           const raw = cell.getValue()
           const content = isNullishDisplay(raw)
@@ -263,14 +283,15 @@ export function DataTable({ lineId }) {
             <TableCell
               key={cell.id}
               data-editable={isEditable ? "true" : "false"}
-              style={{ width, minWidth: width, maxWidth: width }}
+              style={{ width: widthPx, minWidth: widthPx, maxWidth: widthPx }}
               className={cn(
                 "align-center",
                 textAlignClass,
                 !isEditable && "caret-transparent focus:outline-none"
               )}
             >
-              {content}
+              {/* 내부는 폭 지정 없이 텍스트 오버플로 처리 */}
+              <div className="truncate">{content}</div>
             </TableCell>
           )
         })}
@@ -280,10 +301,12 @@ export function DataTable({ lineId }) {
 
   /* ──────────────────────────────────────────────────────────────────────────
    * 7) 렌더
+   *    - table-fixed + colgroup: 컬럼 단위 폭이 확실히 적용
+   *    - Table 전체 width는 table.getTotalSize()로 지정 (px 문자열)
    * ──────────────────────────────────────────────────────────────────────── */
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-3 px-4 lg:px-6">
-      {/* 상단: 타이틀/검색/리프레시 */}
+      {/* 상단: 타이틀/리프레시 */}
       <div className="flex flex-wrap justify-between items-start">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-lg font-semibold">
@@ -323,10 +346,15 @@ export function DataTable({ lineId }) {
 
       {/* 테이블 */}
       <TableContainer className="flex-1 h-[calc(100vh-3rem)] overflow-y-auto overflow-x-auto rounded-lg border px-1">
-        <Table className="table-fixed w-full" style={{ width: table.getTotalSize() }} stickyHeader>
+        <Table
+          className="table-fixed w-full"
+          style={{ width: `${table.getTotalSize()}px`, tableLayout: "fixed" }}
+          stickyHeader
+        >
+          {/* ✅ 컬럼 전체 폭 동기화: colgroup에 getVisibleLeafColumns() 사이즈를 반영 */}
           <colgroup>
             {table.getVisibleLeafColumns().map((column) => (
-              <col key={column.id} style={{ width: column.getSize() }} />
+              <col key={column.id} style={{ width: `${column.getSize()}px` }} />
             ))}
           </colgroup>
 
@@ -341,6 +369,7 @@ export function DataTable({ lineId }) {
                   const justifyClass = getJustifyClass(align)
                   const headerContent = flexRender(header.column.columnDef.header, header.getContext())
                   const width = header.getSize()
+                  const widthPx = `${width}px`
 
                   const ariaSort =
                     sortDirection === "asc"
@@ -353,7 +382,7 @@ export function DataTable({ lineId }) {
                     <TableHead
                       key={header.id}
                       className={cn("relative whitespace-nowrap sticky top-0 z-10 bg-muted")}
-                      style={{ width, minWidth: width, maxWidth: width }}
+                      style={{ width: widthPx, minWidth: widthPx, maxWidth: widthPx }}
                       scope="col"
                       aria-sort={ariaSort}
                     >
@@ -373,7 +402,7 @@ export function DataTable({ lineId }) {
                         </div>
                       )}
 
-                      {/* 컬럼 리사이저 */}
+                      {/* 컬럼 리사이저 (시각적 핸들) */}
                       <span
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}

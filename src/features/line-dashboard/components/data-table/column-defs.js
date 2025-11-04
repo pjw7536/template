@@ -1,5 +1,19 @@
-// /src/features/line-dashboard/components/data-table/column-defs.jsx
 "use client"
+
+/**
+ * column-defs.jsx (Refactored)
+ * -----------------------------------------------------------------------------
+ * ✅ 핵심 아이디어
+ * 1) "현재 보이는 데이터(rowsForSizing)"를 기준으로 텍스트/프로세스 흐름 컬럼의 자동 폭을 계산
+ * 2) comment뿐 아니라 sdwt_prod, ppid, sample_type, knoxid/knox_id, user_sdwt_prod에도 동일 로직 적용
+ * 3) 모든 폭은 안전한 최소/최대값 사이로 클램프하여 레이아웃 안정성 보장
+ * 4) TanStack Table v8의 size/minSize/maxSize 힌트를 통해 사용자 리사이즈/레이아웃 일관성 유지
+ * 5) main_step + metro_steps을 하나의 "process_flow" 컬럼으로 병합 표현(옵션)
+ *
+ * 사용 팁
+ * - DataTable.jsx에서 createColumnDefs(columns, userConfig, firstVisibleRow, filteredRows)를 호출하세요.
+ * - rowsForSizing에는 "현재 보이는 데이터(예: filteredRows)"를 전달해야 동적 폭이 실시간 반영됩니다.
+ */
 
 import Link from "next/link"
 import { ExternalLink, Check } from "lucide-react"
@@ -13,29 +27,10 @@ import {
   normalizeStepValue,
 } from "./utils/formatters"
 
-/* =================================================================================
- * 구성 가능한 옵션 레이어 (UserConfig)
- * - 컬럼 순서/레이블/정렬 허용/정렬 타입/기본 너비/정렬 방향을 한 번에 커스터마이즈
- * - 필요 옵션만 넘기면 나머지는 기본값 사용
- * ================================================================================= */
-
-/**
- * @typedef {Object} UserConfig
- * @property {string[]} [order]                // 최종 컬럼 표시 순서(명시되지 않은 키는 뒤에 자동 배치)
- * @property {Record<string, string>} [labels] // 컬럼 표시이름 매핑 (key -> label)
- * @property {Record<string, boolean>} [sortable] // 각 컬럼 정렬 허용 여부 (true/false)
- * @property {Record<string, "auto"|"text"|"number"|"datetime">} [sortTypes] // 정렬 방식 지정
- * @property {Record<string, number>} [width]  // 각 컬럼 "기본" 너비(px) 힌트
- * @property {string} [processFlowHeader]      // 병합 스텝컬럼 라벨 (기본: "process_flow")
- * @property {Record<string, "left"|"center"|"right">} [cellAlign]   // 셀 정렬 방향
- * @property {Record<string, "left"|"center"|"right">} [headerAlign] // 헤더 정렬 방향 (없으면 셀과 동일)
- */
-
-/* ----------------------- 기본 사이즈 정책 -----------------------
- * - size: 초기/기본 폭
- * - minSize/maxSize: 사용자 리사이즈 시 허용 범위
- *   (TanStack Table v8은 size 힌트를 바인딩하면 리사이저/colgroup과 함께 안정적으로 반영됨)
- */
+/* ────────────────────────────────────────────────────────────────────────────
+ * 0) 폭/레이아웃 상수 (프로젝트 폰트/크기에 맞게 미세 조정 가능)
+ * ──────────────────────────────────────────────────────────────────────────── */
+// 공통 기본 폭
 const DEFAULT_MIN_WIDTH = 72
 const DEFAULT_MAX_WIDTH = 480
 const DEFAULT_TEXT_WIDTH = 140
@@ -45,9 +40,41 @@ const DEFAULT_DATE_WIDTH = 100
 const DEFAULT_BOOL_ICON_WIDTH = 70
 const DEFAULT_PROCESS_FLOW_WIDTH = 360
 
-/** 기본 설정 */
+// comment 폭 계산용(문자 폭 근사치 + 셀 패딩 + 상한)
+const COMMENT_CHAR_UNIT_PX = 7.2
+const COMMENT_CELL_PADDING = 48
+const COMMENT_MAX_WIDTH = 960
+
+// process_flow 폭 계산용(스텝 라벨/칩/화살표의 근사 폭 요소)
+const PROCESS_FLOW_STEP_CHAR_UNIT_PX = 2
+const PROCESS_FLOW_STEP_PADDING = 5
+const PROCESS_FLOW_LABEL_CHAR_UNIT_PX = 15
+const PROCESS_FLOW_LABEL_PADDING = 5
+const PROCESS_FLOW_ARROW_WITH_GAP = 10
+const PROCESS_FLOW_CELL_PADDING = 20
+const PROCESS_FLOW_MIN_STEP_BLOCK_WIDTH = 30
+const PROCESS_FLOW_MAX_WIDTH = 1200
+const PROCESS_FLOW_MIN_WIDTH = DEFAULT_MIN_WIDTH
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * 1) UserConfig 타입/기본값
+ *    - autoWidth: 각 컬럼의 자동 폭 사용 여부를 토글합니다.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * @typedef {Object} UserConfig
+ * @property {string[]} [order]                // 최종 컬럼 표시 순서(명시되지 않은 키는 뒤에 자동 배치)
+ * @property {Record<string, string>} [labels] // 컬럼 라벨(표시이름) 매핑
+ * @property {Record<string, boolean>} [sortable] // 정렬 허용 여부
+ * @property {Record<string, "auto"|"text"|"number"|"datetime">} [sortTypes] // 정렬 타입
+ * @property {Record<string, number>} [width]  // 기본 폭(px) 힌트
+ * @property {string} [processFlowHeader]      // 스텝 병합 컬럼 헤더 라벨
+ * @property {Record<string, "left"|"center"|"right">} [cellAlign]   // 셀 정렬
+ * @property {Record<string, "left"|"center"|"right">} [headerAlign] // 헤더 정렬
+ * @property {Record<string, boolean>} [autoWidth] // 컬럼별 자동 폭 사용 여부
+ */
+
 const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
-  // 제공 시 해당 순서를 우선(명시되지 않은 키는 뒤에 자동 배치)
   order: [
     "created_at",
     "line_id",
@@ -66,14 +93,12 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     "informed_at",
     "jira_key",
     "defect_url",
-    "knoxid",
+    "knoxid",          // ⚠️ 실제 스키마가 knox_id면 labels/order/autoWidth에서 키를 맞춰주세요
     "user_sdwt_prod",
   ],
-
-  // 표시 이름 기본 매핑 (원하면 userConfig.labels로 덮어쓰기)
   labels: {
     defect_url: "Defect",
-    jira_key: "Jira", // ⬅️ Jira 컬럼 라벨
+    jira_key: "Jira",
     comment: "Comment",
     needtosend: "예약",
     send_jira: "JIRA",
@@ -81,40 +106,31 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     knoxid: "KnoxID",
     process_flow: "Process Flow",
   },
-
-  // 기본 정렬 허용/비허용
-  // 링크 컬럼(외부 이동)은 보통 정렬 비권장
   sortable: {
     defect_url: false,
-    jira_key: false, // ⬅️ Jira 링크 컬럼 정렬 비활성화(원하면 true로 바꾸세요)
+    jira_key: true,
     comment: true,
     needtosend: true,
     send_jira: true,
     status: true,
   },
-
-  // 기본 정렬 타입: 지정 없으면 "auto"
   sortTypes: {
     comment: "text",
     needtosend: "number",
     send_jira: "number",
     status: "text",
-    // 기타 컬럼은 auto 추론
   },
-
-  // ⛳ 기본 폭 힌트 (없으면 타입/키명 기반으로 안전한 기본값 추론)
   width: {
-    created_at: 90,
-    line_id: 70,
+    created_at: 100,
+    line_id: 80,
     sdwt_prod: 120,
     EQP_CB: 110,
     proc_id: 110,
     ppid: 80,
     sample_type: 200,
-    sample_group: 200,
-    lot_id: 100,
+    lot_id: 80,
     status: 150,
-    process_flow: 600,
+    process_flow: 40,
     comment: 400,
     needtosend: 40,
     send_jira: 40,
@@ -123,16 +139,12 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     defect_url: 60,
     knoxid: 100,
     user_sdwt_prod: 120,
-    updated_at: 90,
+    updated_at: 100,
   },
-
-  // 병합 스텝 라벨
   processFlowHeader: "process_flow",
-
-  // 정렬 방향(셀/헤더)
   cellAlign: {
-    created_at: "center",
-    line_id: "center",
+    created_at: "left",
+    line_id: "left",
     sdwt_prod: "left",
     EQP_CB: "left",
     proc_id: "left",
@@ -150,7 +162,6 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     defect_url: "center",
     knoxid: "center",
     user_sdwt_prod: "center",
-
   },
   headerAlign: {
     created_at: "left",
@@ -173,9 +184,19 @@ const DEFAULT_CONFIG = /** @type {UserConfig} */ ({
     knoxid: "left",
     user_sdwt_prod: "left",
   },
+  autoWidth: {
+
+    process_flow: true,
+    comment: true,
+    sdwt_prod: true,
+    ppid: true,
+    sample_group: true,
+    user_sdwt_prod: true,
+    knoxid: true,
+
+  },
 })
 
-/** config 병합 유틸 */
 function mergeConfig(userConfig) {
   const u = userConfig ?? {}
   return {
@@ -187,14 +208,14 @@ function mergeConfig(userConfig) {
     processFlowHeader: u.processFlowHeader ?? DEFAULT_CONFIG.processFlowHeader,
     cellAlign: { ...DEFAULT_CONFIG.cellAlign, ...(u.cellAlign ?? {}) },
     headerAlign: { ...DEFAULT_CONFIG.headerAlign, ...(u.headerAlign ?? {}) },
+    autoWidth: { ...DEFAULT_CONFIG.autoWidth, ...(u.autoWidth ?? {}) },
   }
 }
 
-/* =================================================================================
- * 공통 유틸
- * ================================================================================= */
+/* ────────────────────────────────────────────────────────────────────────────
+ * 2) 공통 유틸 (URL, ID, JIRA, 상태/정렬/정렬함수 추론)
+ * ──────────────────────────────────────────────────────────────────────────── */
 
-/** 문자열을 http(s) URL로 정규화(스킴 없으면 https 가정) */
 function toHttpUrl(raw) {
   if (raw == null) return null
   const s = String(raw).trim()
@@ -203,22 +224,18 @@ function toHttpUrl(raw) {
   return `https://${s}`
 }
 
-/** 행의 id를 문자열로 안전 추출 */
 function getRecordId(rowOriginal) {
   const rawId = rowOriginal?.id
   if (rawId === undefined || rawId === null) return null
   return String(rawId)
 }
 
-/** Jira 키(예: ABC-123)를 안전히 정규화 */
 function normalizeJiraKey(raw) {
   if (raw == null) return null
   const s = String(raw).trim().toUpperCase()
-  // 간단한 패턴 필터: PROJECTKEY-숫자
   return /^[A-Z0-9]+-\d+$/.test(s) ? s : null
 }
 
-/** Jira 브라우즈 URL 생성: https://jira.apple.net/browse/{KEY} */
 function buildJiraBrowseUrl(jiraKey) {
   const key = normalizeJiraKey(jiraKey)
   return key ? `https://jira.apple.net/browse/${key}` : null
@@ -240,7 +257,6 @@ function normalizeNeedToSend(raw) {
   return Number.isFinite(n) ? n : 0
 }
 
-/** ✅ '1'만 참으로, 그 외(0, ".", "", null, undefined)는 거짓 */
 function normalizeBinaryFlag(raw) {
   if (raw === 1 || raw === "1") return true
   if (raw === "." || raw === "" || raw == null) return false
@@ -248,83 +264,18 @@ function normalizeBinaryFlag(raw) {
   return Number.isFinite(n) ? n === 1 : false
 }
 
-/** STATUS 문자열 표준화 */
 function normalizeStatus(raw) {
   if (raw == null) return null
   const s = String(raw).trim().toUpperCase().replace(/\s+/g, "_")
   return s
 }
 
-/** 진행률 계산: main_step + metro_steps 상에서 current/end/complete 고려 */
-function computeMetroProgress(rowOriginal, normalizedStatus) {
-  const mainStep = normalizeStepValue(rowOriginal?.main_step)
-  const metroSteps = parseMetroSteps(rowOriginal?.metro_steps)
-  const customEndStep = normalizeStepValue(rowOriginal?.custom_end_step)
-  const currentStep = normalizeStepValue(rowOriginal?.metro_current_step)
-
-  // ① 유효한 metro step 목록 계산 (custom_end_step 전까지만 유효)
-  const effectiveMetroSteps = (() => {
-    if (!metroSteps.length) return []
-    if (!customEndStep) return metroSteps
-    const endIndex = metroSteps.findIndex((step) => step === customEndStep)
-    return endIndex >= 0 ? metroSteps.slice(0, endIndex + 1) : metroSteps
-  })()
-
-  // ② main + metro 결합
-  const orderedSteps = []
-  if (mainStep) {
-    // 중복 방지: metroSteps에 이미 있으면 추가하지 않음
-    if (!metroSteps.includes(mainStep)) {
-      orderedSteps.push(mainStep)
-    }
-  }
-  orderedSteps.push(...effectiveMetroSteps)
-
-  const total = orderedSteps.length
-  if (total === 0) return { completed: 0, total: 0 }
-
-  // ③ 현재 단계 위치 계산
-  let completed = 0
-
-  if (!currentStep) {
-    completed = 0
-  } else {
-    const currentIndex = orderedSteps.findIndex((step) => step === currentStep)
-
-    if (customEndStep) {
-      const currentIndexInFull = metroSteps.findIndex((step) => step === currentStep)
-      const endIndexInFull = metroSteps.findIndex((step) => step === customEndStep)
-      if (currentIndexInFull >= 0 && endIndexInFull >= 0 && currentIndexInFull > endIndexInFull) {
-        completed = total // end 이후면 강제 100%
-      } else if (currentIndex >= 0) {
-        completed = currentIndex + 1
-      }
-    } else if (currentIndex >= 0) {
-      completed = currentIndex + 1
-    }
-  }
-
-  // ④ 상태 COMPLETE면 100%
-  if (normalizedStatus === "COMPLETE") {
-    completed = total
-  }
-
-  return {
-    completed: Math.max(0, Math.min(completed, total)),
-    total,
-  }
-}
-
-/* =================================================================================
- * 정렬 유틸 (TanStack v8 sortingFn comparator)
- * ================================================================================= */
-
+// 정렬 타입/함수
 function isNumeric(value) {
   if (value == null || value === "") return false
   const n = Number(value)
   return Number.isFinite(n)
 }
-
 function tryDate(value) {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
   if (typeof value === "string") {
@@ -333,13 +284,11 @@ function tryDate(value) {
   }
   return null
 }
-
 function cmpText(a, b) {
   const sa = a == null ? "" : String(a)
   const sb = b == null ? "" : String(b)
   return sa.localeCompare(sb)
 }
-
 function cmpNumber(a, b) {
   const na = Number(a)
   const nb = Number(b)
@@ -348,7 +297,6 @@ function cmpNumber(a, b) {
   if (!Number.isFinite(nb)) return 1
   return na - nb
 }
-
 function cmpDate(a, b) {
   const da = tryDate(a)
   const db = tryDate(b)
@@ -358,7 +306,6 @@ function cmpDate(a, b) {
   return da.getTime() - db.getTime()
 }
 
-/** 정렬 방식 auto 추론 */
 function autoSortType(sample) {
   if (sample == null) return "text"
   if (isNumeric(sample)) return "number"
@@ -366,93 +313,313 @@ function autoSortType(sample) {
   return "text"
 }
 
-/* =================================================================================
- * 정렬 방향(Alignment) 유틸
- * ================================================================================= */
-
+// 정렬 방향(셀/헤더 정렬)
 const ALIGNMENT_VALUES = new Set(["left", "center", "right"])
-
 function normalizeAlignment(value, fallback = "left") {
   if (typeof value !== "string") return fallback
   const lower = value.toLowerCase()
   return ALIGNMENT_VALUES.has(lower) ? lower : fallback
 }
-
 function inferDefaultAlignment(colKey, sampleValue) {
   if (typeof sampleValue === "number") return "right"
   if (isNumeric(sampleValue)) return "right"
   if (colKey && /(_?id|count|qty|amount|number)$/i.test(colKey)) return "right"
   return "left"
 }
-
 function resolveAlignment(colKey, config, sampleValue) {
   const inferred = inferDefaultAlignment(colKey, sampleValue)
   const cellAlignment = normalizeAlignment(config.cellAlign?.[colKey], inferred)
   const headerAlignment = normalizeAlignment(config.headerAlign?.[colKey], cellAlignment)
   return { cell: cellAlignment, header: headerAlignment }
 }
-
-/** 정렬 comparator를 반환 */
 function getSortingFnForKey(colKey, config, sampleValue) {
   const t = (config.sortTypes && config.sortTypes[colKey]) || "auto"
   const sortType = t === "auto" ? autoSortType(sampleValue) : t
-
   if (sortType === "number")
     return (rowA, rowB) => cmpNumber(rowA.getValue(colKey), rowB.getValue(colKey))
   if (sortType === "datetime")
     return (rowA, rowB) => cmpDate(rowA.getValue(colKey), rowB.getValue(colKey))
-  // 기본 text
   return (rowA, rowB) => cmpText(rowA.getValue(colKey), rowB.getValue(colKey))
 }
 
-/* =================================================================================
- * 컬럼 width 유틸: 타입/키 기반 기본 폭 자동 추론 + 범위 클램프
- * ================================================================================= */
+/* ────────────────────────────────────────────────────────────────────────────
+ * 3) 진행률/프로세스 흐름 계산(상태 바/퍼센트 등)
+ * ──────────────────────────────────────────────────────────────────────────── */
 
-/** 숫자/날짜/ID/불린/텍스트에 따라 안전한 기본 폭을 제시 */
+function computeMetroProgress(rowOriginal, normalizedStatus) {
+  const mainStep = normalizeStepValue(rowOriginal?.main_step)
+  const metroSteps = parseMetroSteps(rowOriginal?.metro_steps)
+  const customEndStep = normalizeStepValue(rowOriginal?.custom_end_step)
+  const currentStep = normalizeStepValue(rowOriginal?.metro_current_step)
+
+  // custom_end_step까지 유효한 metro steps 슬라이싱
+  const effectiveMetroSteps = (() => {
+    if (!metroSteps.length) return []
+    if (!customEndStep) return metroSteps
+    const endIndex = metroSteps.findIndex((step) => step === customEndStep)
+    return endIndex >= 0 ? metroSteps.slice(0, endIndex + 1) : metroSteps
+  })()
+
+  // main이 metro에 없으면 선두에 삽입
+  const orderedSteps = []
+  if (mainStep && !metroSteps.includes(mainStep)) orderedSteps.push(mainStep)
+  orderedSteps.push(...effectiveMetroSteps)
+
+  const total = orderedSteps.length
+  if (total === 0) return { completed: 0, total: 0 }
+
+  let completed = 0
+  if (!currentStep) {
+    completed = 0
+  } else {
+    const currentIndex = orderedSteps.findIndex((step) => step === currentStep)
+    if (customEndStep) {
+      // current가 custom_end 이후면 100%
+      const currentIndexInFull = metroSteps.findIndex((step) => step === currentStep)
+      const endIndexInFull = metroSteps.findIndex((step) => step === customEndStep)
+      if (currentIndexInFull >= 0 && endIndexInFull >= 0 && currentIndexInFull > endIndexInFull) {
+        completed = total
+      } else if (currentIndex >= 0) {
+        completed = currentIndex + 1
+      }
+    } else if (currentIndex >= 0) {
+      completed = currentIndex + 1
+    }
+  }
+
+  if (normalizedStatus === "COMPLETE") completed = total
+  return { completed: Math.max(0, Math.min(completed, total)), total }
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * 4) 가시 텍스트 길이 기반 폭 계산 유틸
+ *    - 멀티바이트(한글/이모지) 가중치 반영
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** 텍스트의 가시 길이를 근사(ASCII=1, CJK/emoji=2) */
+function estimateVisualUnits(value) {
+  if (value === null || value === undefined) return 0
+  const str = typeof value === "string" ? value : String(value)
+  if (!str) return 0
+
+  let units = 0
+  for (const char of Array.from(str)) {
+    const codePoint = char.codePointAt(0) ?? 0
+    if (codePoint === 0) continue
+    if (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) continue
+    if (codePoint <= 0xff) units += 1
+    else units += 2
+  }
+  return units
+}
+
+/** 멀티라인 텍스트에서 가장 긴 라인의 units 반환 */
+function measureLongestLineUnits(value) {
+  if (value === null || value === undefined) return 0
+  const str = typeof value === "string" ? value : String(value)
+  if (!str) return 0
+  const expanded = str.replace(/\t/g, "    ")
+  const lines = expanded.split(/\r?\n/)
+  let maxUnits = 0
+  for (const line of lines) {
+    const units = estimateVisualUnits(line)
+    if (units > maxUnits) maxUnits = units
+  }
+  return maxUnits
+}
+
+/** (기존) comment 컬럼: 현재 보이는 rows 중 최장 라인 길이 기반 px 폭(클램프 포함) */
+function computeCommentWidthFromRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  let maxUnits = 0
+  for (const row of rows) {
+    const units = measureLongestLineUnits(row?.comment)
+    if (units > maxUnits) maxUnits = units
+  }
+  if (maxUnits === 0) return null
+  const width = Math.ceil(maxUnits * COMMENT_CHAR_UNIT_PX + COMMENT_CELL_PADDING)
+  return Math.max(DEFAULT_MIN_WIDTH, Math.min(width, COMMENT_MAX_WIDTH))
+}
+
+/** ✅ 공용 텍스트 자동폭: 특정 key의 최장 라인 길이로 px 폭을 근사 */
+function computeAutoTextWidthFromRows(
+  rows,
+  key,
+  {
+    charUnitPx = COMMENT_CHAR_UNIT_PX, // 영문 1, CJK/이모지 2로 환산 + 단위폭
+    cellPadding = 40,                  // 좌우 패딩 여유
+    min = DEFAULT_MIN_WIDTH,
+    max = 720,                         // 텍스트 과도 확장 방지 상한
+  } = {}
+) {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  let maxUnits = 0
+  for (const row of rows) {
+    const units = measureLongestLineUnits(row?.[key])
+    if (units > maxUnits) maxUnits = units
+  }
+  if (maxUnits === 0) return null
+  const width = Math.ceil(maxUnits * charUnitPx + cellPadding)
+  return Math.max(min, Math.min(width, max))
+}
+
+/** 유니크 푸시(순서 유지) */
+function pushUnique(list, value) {
+  if (!value) return
+  if (!list.includes(value)) list.push(value)
+}
+
+/** 한 행의 process_flow 블록 전체 폭 근사 */
+function computeProcessFlowWidthFromRow(row) {
+  if (!row || typeof row !== "object") return 0
+
+  const mainStep = normalizeStepValue(row?.main_step)
+  const metroSteps = parseMetroSteps(row?.metro_steps)
+  const informStep = normalizeStepValue(row?.inform_step)
+  const customEndStep = normalizeStepValue(row?.custom_end_step)
+  const metroEndStep = normalizeStepValue(row?.metro_end_step)
+  const needToSend = Number(row?.needtosend) === 1 ? 1 : 0
+  const sendJira = Number(row?.send_jira) === 1 ? 1 : 0
+
+  const orderedSteps = []
+  pushUnique(orderedSteps, mainStep)
+  if (Array.isArray(metroSteps)) for (const step of metroSteps) pushUnique(orderedSteps, step)
+  pushUnique(orderedSteps, informStep)
+  if (orderedSteps.length === 0) return 0
+
+  const endStep = customEndStep || metroEndStep
+
+  // 라벨 표시 위치/종류 결정
+  let informLabelType = "none" // none | planned | done
+  let informLabelStep = null
+  if (sendJira === 1) {
+    informLabelType = "done"
+    informLabelStep = informStep || endStep || null
+  } else if (needToSend === 1) {
+    if (customEndStep) informLabelType = "planned", informLabelStep = customEndStep
+    else if (metroEndStep) informLabelType = "planned", informLabelStep = metroEndStep
+  }
+
+  // 전체 폭 근사
+  let totalWidth = PROCESS_FLOW_CELL_PADDING
+  orderedSteps.forEach((step, index) => {
+    if (index > 0) totalWidth += PROCESS_FLOW_ARROW_WITH_GAP
+
+    // 스텝 칩(이름)
+    const pillUnits = Math.max(estimateVisualUnits(step), 1)
+    const pillWidth = pillUnits * PROCESS_FLOW_STEP_CHAR_UNIT_PX + PROCESS_FLOW_STEP_PADDING
+
+    // 라벨(END/CustomEND/Inform)의 최대 폭
+    const labels = []
+    if (mainStep && step === mainStep) labels.push("MAIN")
+    const isEndHere = Boolean(endStep && step === endStep)
+    const isInformHere = Boolean(informLabelType !== "none" && informLabelStep && step === informLabelStep)
+    if (!isInformHere && isEndHere) labels.push(customEndStep ? "CustomEND" : "END")
+    if (isInformHere) labels.push(informLabelType === "done" ? "Inform 완료" : "인폼예정")
+
+    let labelWidth = 0
+    for (const label of labels) {
+      const labelUnits = Math.max(estimateVisualUnits(label), 1)
+      const w = labelUnits * PROCESS_FLOW_LABEL_CHAR_UNIT_PX + PROCESS_FLOW_LABEL_PADDING
+      if (w > labelWidth) labelWidth = w
+    }
+
+    const blockWidth = Math.max(pillWidth, labelWidth, PROCESS_FLOW_MIN_STEP_BLOCK_WIDTH)
+    totalWidth += blockWidth
+  })
+
+  return totalWidth
+}
+
+/** process_flow 컬럼: 현재 보이는 rows 중 최장 행의 폭(px) (클램프 포함) */
+function computeProcessFlowWidthFromRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  let maxWidth = 0
+  for (const row of rows) {
+    const width = computeProcessFlowWidthFromRow(row)
+    if (width > maxWidth) maxWidth = width
+  }
+  if (maxWidth === 0) return null
+  return Math.max(PROCESS_FLOW_MIN_WIDTH, Math.min(maxWidth, PROCESS_FLOW_MAX_WIDTH))
+}
+
+/** rowsForSizing로부터 동적 폭 힌트 계산 (autoWidth 토글 반영) */
+function computeDynamicWidthHints(rows, cfg) {
+  if (!Array.isArray(rows) || rows.length === 0) return {}
+  const hints = {}
+
+  // 기존: comment 자동 폭
+  if (cfg?.autoWidth?.comment) {
+    const w = computeCommentWidthFromRows(rows)
+    if (w !== null) hints.comment = w
+  }
+
+  // 기존: process_flow 자동 폭
+  if (cfg?.autoWidth?.process_flow) {
+    const w = computeProcessFlowWidthFromRows(rows)
+    if (w !== null) hints.process_flow = w
+  }
+
+  // ✅ 추가: 일반 텍스트 컬럼 자동 폭 (comment와 동일한 방식)
+  // - knoxid vs knox_id: 실제 존재하는 키만 반영되므로 둘 다 시도 가능
+  const textKeys = [
+    "sdwt_prod",
+    "ppid",
+    "sample_type",
+    cfg?.autoWidth?.knox_id ? "knox_id" : "knoxid",
+    "user_sdwt_prod",
+  ]
+
+  for (const key of textKeys) {
+    if (!key) continue
+    if (cfg?.autoWidth?.[key]) {
+      const w = computeAutoTextWidthFromRows(rows, key, {
+        max: 720,      // 과도 확장 방지 상한
+        cellPadding: 40,
+      })
+      if (w !== null) hints[key] = w
+    }
+  }
+
+  return hints
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * 5) 타입/키 기반 기본폭 + 최종 사이즈 힌트
+ * ──────────────────────────────────────────────────────────────────────────── */
+
 function inferDefaultWidth(colKey, sampleValue) {
   if (colKey === "process_flow") return DEFAULT_PROCESS_FLOW_WIDTH
   if (colKey === "needtosend" || colKey === "send_jira") return DEFAULT_BOOL_ICON_WIDTH
   if (/(_?id)$/i.test(colKey)) return DEFAULT_ID_WIDTH
-
   if (tryDate(sampleValue)) return DEFAULT_DATE_WIDTH
   if (isNumeric(sampleValue)) return DEFAULT_NUMBER_WIDTH
-
-  // 기본 텍스트
   return DEFAULT_TEXT_WIDTH
 }
 
-/** 안전한 px 숫자만 허용 */
 function toSafeNumber(n, fallback) {
   const v = Number(n)
   return Number.isFinite(v) && v > 0 ? v : fallback
 }
 
-/** 최종 size/min/max 산출 */
-function resolveColumnSizes(colKey, config, sampleValue) {
-  const base = config.width?.[colKey]
+/** 동적 힌트 → user width → 기본폭 순서로 size/min/max를 결정 */
+function resolveColumnSizes(colKey, config, sampleValue, dynamicWidthHints) {
+  const dynamicWidth = dynamicWidthHints?.[colKey]
+  const base = dynamicWidth !== undefined ? dynamicWidth : config.width?.[colKey]
   const inferred = inferDefaultWidth(colKey, sampleValue)
   const size = toSafeNumber(base, inferred)
 
-  // min/max는 공통 기본 범위를 주되, size가 너무 작거나 큰 경우 보정
   const minSize = Math.min(Math.max(DEFAULT_MIN_WIDTH, Math.floor(size * 0.5)), size)
   const maxSize = Math.max(DEFAULT_MAX_WIDTH, Math.ceil(size * 2))
 
   return { size, minSize, maxSize }
 }
 
-/* =================================================================================
- * 셀 렌더러
- * ================================================================================= */
+/* ────────────────────────────────────────────────────────────────────────────
+ * 6) 셀 렌더러 (링크/토글/상태바 등)
+ * ──────────────────────────────────────────────────────────────────────────── */
 
-/**
- * @typedef {object} RenderArgs
- * @property {any} value
- * @property {any} rowOriginal
- * @property {any} meta
- */
 const CellRenderers = {
-  /** 🔗 defect_url: 아이콘 하이퍼링크(아이콘만 노출) */
   defect_url: ({ value }) => {
     const href = toHttpUrl(value)
     if (!href) return null
@@ -470,11 +637,6 @@ const CellRenderers = {
     )
   },
 
-  /**
-   * 🧷 jira_key: https://jira.apple.net/browse/{JiraKey} 로 변환하여
-   * 하이퍼링크 + 외부링크 아이콘을 함께 표시
-   * - 키 텍스트도 함께 보여주어 한눈에 확인 가능
-   */
   jira_key: ({ value }) => {
     const key = normalizeJiraKey(value)
     const href = buildJiraBrowseUrl(key)
@@ -488,18 +650,14 @@ const CellRenderers = {
         aria-label={`Open JIRA issue ${key} in a new tab`}
         title={key}
       >
-        {/* <span className="font-medium">{key}</span> */}
         <ExternalLink className="h-4 w-4" />
       </Link>
     )
   },
 
-  /** 📝 comment: 인라인 에디터 */
   comment: ({ value, rowOriginal, meta }) => {
     const recordId = getRecordId(rowOriginal)
-    if (!meta || !recordId) {
-      return formatCellValue(value)
-    }
+    if (!meta || !recordId) return formatCellValue(value)
     return (
       <CommentCell
         meta={meta}
@@ -509,16 +667,11 @@ const CellRenderers = {
     )
   },
 
-  /** ✅ needtosend: 토글 (send_jira=1이면 비활성) */
   needtosend: ({ value, rowOriginal, meta }) => {
     const recordId = getRecordId(rowOriginal)
-    if (!meta || !recordId) {
-      return formatCellValue(value)
-    }
-
-    const baseValue = normalizeNeedToSend(rowOriginal?.needtosend) // 0|1
+    if (!meta || !recordId) return formatCellValue(value)
+    const baseValue = normalizeNeedToSend(rowOriginal?.needtosend)
     const isLocked = Number(rowOriginal?.send_jira) === 1
-
     return (
       <NeedToSendCell
         meta={meta}
@@ -530,7 +683,6 @@ const CellRenderers = {
     )
   },
 
-  /** 🟢 send_jira: 1이면 “원형 내부 체크”, 아니면 빈 원형 */
   send_jira: ({ value }) => {
     const ok = normalizeBinaryFlag(value)
     return (
@@ -548,7 +700,6 @@ const CellRenderers = {
     )
   },
 
-  /** 🧭 status: 진행률 바 + 라벨 */
   status: ({ value, rowOriginal }) => {
     const st = normalizeStatus(value)
     const labels = {
@@ -558,7 +709,6 @@ const CellRenderers = {
       COMPLETE: "Complete",
     }
     const label = labels[st] ?? st ?? "Unknown"
-
     const { completed, total } = computeMetroProgress(rowOriginal, st)
     const percent = total > 0 ? Math.min(100, Math.max(0, (completed / total) * 100)) : 0
 
@@ -593,7 +743,6 @@ const CellRenderers = {
   },
 }
 
-/** 컬럼 키에 맞는 셀 렌더러 선택 (없으면 기본 포맷) */
 function renderCellByKey(colKey, info) {
   const meta = info.table?.options?.meta
   const value = info.getValue()
@@ -603,16 +752,15 @@ function renderCellByKey(colKey, info) {
   return formatCellValue(value)
 }
 
-/* =================================================================================
- * 스텝 병합 관련( main_step + metro_steps → process_flow )
- * ================================================================================= */
+/* ────────────────────────────────────────────────────────────────────────────
+ * 7) 스텝 병합(main_step + metro_steps → process_flow)
+ * ──────────────────────────────────────────────────────────────────────────── */
 
 function pickStepColumnsWithIndex(columns) {
   return columns
     .map((key, index) => ({ key, index }))
     .filter(({ key }) => STEP_COLUMN_KEY_SET.has(key))
 }
-
 function shouldCombineSteps(stepCols) {
   if (!stepCols.length) return false
   return (
@@ -620,7 +768,6 @@ function shouldCombineSteps(stepCols) {
     stepCols.some(({ key }) => key === "metro_steps")
   )
 }
-
 function getSampleValueForColumns(row, columns) {
   if (!row || typeof row !== "object" || !Array.isArray(columns)) return undefined
   for (const { key } of columns) {
@@ -628,11 +775,15 @@ function getSampleValueForColumns(row, columns) {
   }
   return undefined
 }
-
-function makeStepFlowColumn(stepCols, label, config, firstRow) {
+function makeStepFlowColumn(stepCols, label, config, firstRow, dynamicWidthHints) {
   const sample = getSampleValueForColumns(firstRow, stepCols)
   const alignment = resolveAlignment("process_flow", config, sample)
-  const { size, minSize, maxSize } = resolveColumnSizes("process_flow", config, sample)
+  const { size, minSize, maxSize } = resolveColumnSizes(
+    "process_flow",
+    config,
+    sample,
+    dynamicWidthHints
+  )
 
   return {
     id: "process_flow",
@@ -647,28 +798,30 @@ function makeStepFlowColumn(stepCols, label, config, firstRow) {
   }
 }
 
-/* =================================================================================
- * 컬럼 팩토리
- * ================================================================================= */
+/* ────────────────────────────────────────────────────────────────────────────
+ * 8) 컬럼 팩토리 (정렬/정렬함수/정렬방향/폭/렌더러 일괄 설정)
+ * ──────────────────────────────────────────────────────────────────────────── */
 
-function makeColumnDef(colKey, config, sampleValueFromFirstRow) {
+function makeColumnDef(colKey, config, sampleValueFromFirstRow, dynamicWidthHints) {
   const label = (config.labels && config.labels[colKey]) || colKey
 
-  // enableSorting 결정: userConfig.sortable 우선, 없으면 기본 규칙
+  // 정렬 허용 여부: userConfig.sortable 우선, 없으면 링크 컬럼은 비권장
   const enableSorting =
     (config.sortable && typeof config.sortable[colKey] === "boolean")
       ? config.sortable[colKey]
-      : colKey !== "defect_url" && colKey !== "jira_key" // 링크 컬럼은 기본 비권장
+      : colKey !== "defect_url" && colKey !== "jira_key"
 
-  // sortingFn: 정렬 허용일 때만 타입별 comparator 제공
   const sortingFn = enableSorting
     ? getSortingFnForKey(colKey, config, sampleValueFromFirstRow)
     : undefined
 
-  // 🔧 사이즈(기본/최소/최대) 계산
-  const { size, minSize, maxSize } = resolveColumnSizes(colKey, config, sampleValueFromFirstRow)
+  const { size, minSize, maxSize } = resolveColumnSizes(
+    colKey,
+    config,
+    sampleValueFromFirstRow,
+    dynamicWidthHints
+  )
 
-  // 정렬(헤더/셀) 방향
   const alignment = resolveAlignment(colKey, config, sampleValueFromFirstRow)
 
   return {
@@ -682,53 +835,60 @@ function makeColumnDef(colKey, config, sampleValueFromFirstRow) {
     cell: (info) => renderCellByKey(colKey, info),
     enableSorting,
     sortingFn,
-    // ⛳ TanStack Table v8 사이징 힌트
     size,
     minSize,
     maxSize,
   }
 }
 
-/* =================================================================================
- * Public API
- * - createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess?)
- *   - rawColumns: 원본 컬럼 키 배열
- *   - userConfig: 위 UserConfig
- *   - firstRowForTypeGuess: 첫 행 데이터(정렬 타입/폭 추론 정확도 향상용 · 선택)
- * ================================================================================= */
+/* ────────────────────────────────────────────────────────────────────────────
+ * 9) Public API
+ *    createColumnDefs(rawColumns, userConfig?, firstRowForTypeGuess?, rowsForSizing?)
+ *    - rowsForSizing: ✅ 현재 보이는 데이터(예: filteredRows)를 넘기세요!
+ * ──────────────────────────────────────────────────────────────────────────── */
 
-export function createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess) {
+export function createColumnDefs(
+  rawColumns,
+  userConfig,
+  firstRowForTypeGuess,
+  rowsForSizing
+) {
   const config = mergeConfig(userConfig)
+  const dynamicWidthHints = computeDynamicWidthHints(rowsForSizing, config)
   const columns = Array.isArray(rawColumns) ? rawColumns : []
 
-  // 1) 스텝 병합 판단
+  // 스텝 병합 판단
   const stepCols = pickStepColumnsWithIndex(columns)
   const combineSteps = shouldCombineSteps(stepCols)
 
-  // 2) 병합 시, 스텝 관련 키 제거 → baseKeys
+  // 병합 시, 원본 스텝 키(main_step/metro_steps)는 제거하고 process_flow 1개로 대체
   const baseKeys = combineSteps
     ? columns.filter((key) => !STEP_COLUMN_KEY_SET.has(key))
     : [...columns]
 
-  // 3) 우선 전체 컬럼Def 생성
+  // 전체 컬럼 Def 생성
   const defs = baseKeys.map((key) => {
     const sample = firstRowForTypeGuess ? firstRowForTypeGuess?.[key] : undefined
-    return makeColumnDef(key, config, sample)
+    return makeColumnDef(key, config, sample, dynamicWidthHints)
   })
 
-  // 4) 병합 컬럼 삽입 (라벨은 labels.process_flow > processFlowHeader 순으로 사용)
+  // 병합 컬럼 삽입
   if (combineSteps) {
     const headerText = config.labels?.process_flow || config.processFlowHeader || "process_flow"
-    const stepFlowCol = makeStepFlowColumn(stepCols, headerText, config, firstRowForTypeGuess)
-    // 기본 삽입 위치: 원래 스텝 컬럼들 중 가장 앞 인덱스
+    const stepFlowCol = makeStepFlowColumn(
+      stepCols,
+      headerText,
+      config,
+      firstRowForTypeGuess,
+      dynamicWidthHints
+    )
     const insertionIndex = stepCols.length ? Math.min(...stepCols.map(({ index }) => index)) : defs.length
     defs.splice(Math.min(Math.max(insertionIndex, 0), defs.length), 0, stepFlowCol)
   }
 
-  // 5) userConfig.order 로 최종 순서 재정렬
+  // userConfig.order 적용(지정된 순서를 우선으로 머지)
   const order = Array.isArray(config.order) ? config.order : null
   if (order && order.length > 0) {
-    // 현재 defs에 존재하는 컬럼 id만 사용
     const idSet = new Set(defs.map((d) => d.id))
     const head = order.filter((id) => idSet.has(id))
     const tail = defs.map((d) => d.id).filter((id) => !head.includes(id))
@@ -745,44 +905,29 @@ export function createColumnDefs(rawColumns, userConfig, firstRowForTypeGuess) {
   return defs
 }
 
-/* =================================================================================
- * 사용 예시 (참고)
- * ---------------------------------------------------------------------------------
- * const cols = Object.keys(rows[0] ?? {})
- * const defs = createColumnDefs(cols, {
- *   order: ["status","process_flow","lot_id","defect_url","jira_key","comment","needtosend"],
- *   labels: {
- *     lot_id: "LOT",
- *     process_flow: "Flow",
- *     needtosend: "Send?",
- *     jira_key: "Jira",
+/* ────────────────────────────────────────────────────────────────────────────
+ * 10) 사용 예 (참고)
+ * -----------------------------------------------------------------------------
+ * const rawColumns = Object.keys(filteredRows?.[0] ?? {})
+ * const defs = createColumnDefs(
+ *   rawColumns,
+ *   {
+ *     order: ["status","process_flow","lot_id","defect_url","jira_key","comment","needtosend"],
+ *     labels: { process_flow: "Flow", needtosend: "Send?", jira_key: "Jira" },
+ *     sortable: { defect_url: false, jira_key: false, send_jira: false, status: true },
+ *     sortTypes: { lot_id: "text", needtosend: "number", status: "text" },
+ *     width: { status: 180, process_flow: 320, comment: 260, jira_key: 160 },
+ *     cellAlign: { defect_url: "center", jira_key: "center", needtosend: "right" },
+ *     headerAlign: { needtosend: "right", jira_key: "center" },
+ *     processFlowHeader: "process_flow",
+ *     autoWidth: {
+ *       process_flow: true,
+ *       comment: true,
+ *       sdwt_prod: true, ppid: true, sample_type: true, user_sdwt_prod: true, knoxid: true
+ *     },
  *   },
- *   sortable: {
- *     defect_url: false,
- *     jira_key: false, // 텍스트 정렬 원하면 true
- *     send_jira: false,
- *     status: true,
- *   },
- *   sortTypes: {
- *     lot_id: "text",
- *     needtosend: "number",
- *     status: "text",
- *   },
- *   width: {
- *     status: 180,
- *     process_flow: 320,
- *     comment: 260,
- *     jira_key: 160,
- *   },
- *   cellAlign: {
- *     defect_url: "center",
- *     jira_key: "center",
- *     needtosend: "right",
- *   },
- *   headerAlign: {
- *     needtosend: "right",
- *     jira_key: "center",
- *   },
- *   processFlowHeader: "process_flow", // 또는 "Flow"
- * }, rows?.[0])
- * ================================================================================= */
+ *   filteredRows?.[0],  // 타입/정렬 추론 샘플
+ *   filteredRows        // ✅ 폭 계산 기준(현재 보이는 데이터)
+ * )
+ * -----------------------------------------------------------------------------
+ */
