@@ -16,10 +16,11 @@ import {
 import { computeMetroProgress } from "./processFlow"
 
 const STATUS_LABELS = {
-  ESOP_STARTED: "ESOP Started",
-  MAIN_COMPLETE: "Main Complete",
-  PARTIAL_COMPLETE: "Partial Complete",
-  COMPLETE: "Complete",
+  ESOP_STARTED: "ESOP시작",
+  ESOP_STRATED: "ESOP시작",
+  MAIN_COMPLETE: "MAIN완료",
+  PARTIAL_COMPLETE: "계측중",
+  COMPLETE: "완료",
 }
 
 const CellRenderers = {
